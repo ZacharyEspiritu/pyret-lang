@@ -22,6 +22,7 @@ fun main(args :: List<String>) -> Number block:
       in-file = r.get-value('in-file')
       out-file = r.get-value('out-file')
       p = SP.surface-parse(F.input-file(in-file).read-file(), in-file)
+      print(p.visit(AV.dummy-loc-visitor))
       as-string = p.tosource().pretty(80).join-str("\n")
       F.output-file(out-file, false).display(as-string)
       success-code
