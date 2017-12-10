@@ -3,6 +3,7 @@ import ast as A
 import ast-visitors as AV
 import parse-pyret as SP
 import file as F
+import format as FMT
 
 dummy = A.dummy-loc
 is-strip-annotation = false
@@ -86,10 +87,12 @@ body = [list:
     '{}'),
 ]
 
+degeneric = 'degeneric'
+
 fun get-arg-list(lst :: List<A.Bind>) -> List<A.Expr>:
   for map_n(i from 0, _ from lst):
     [list: AT.make-method-call(AT.make-id('args'), 'get', [list: A.s-num(dummy, i)])]
-      ^ A.s-app(dummy, AT.make-id('degeneric'), _)
+      ^ A.s-app(dummy, AT.make-id(degeneric), _)
   end
 end
 
@@ -115,7 +118,7 @@ if-pipes = for map(variant from collected-variants):
 end
 
 degeneric-str = ```
-fun degeneric(g):
+fun ``` + degeneric + ```(g):
   cases (GenericAST) g:
     | g-op(maybe-loc, op, args) => ...
     | g-str(s) => s
