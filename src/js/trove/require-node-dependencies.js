@@ -23,6 +23,18 @@ define("fs", [], function () { return fs; });
 repl = nodeRequire("repl");
 define("repl", [], function () { return repl; });
 
+kernel = nodeRequire("jp-kernel");
+define("jp-kernel", [], function () { return kernel; });
+
+uuid = nodeRequire("uuid");
+define("uuid", [], function () { return uuid; });
+
+jmp = nodeRequire("jmp");
+define("jmp", [], function () { return jmp; });
+
+nel = nodeRequire("nel");
+define("nel", [], function () { return nel; });
+
 path = nodeRequire("path");
 define("path", [], function () { return path; });
 
@@ -34,4 +46,3 @@ define("lockfile", [], function () { return lockfile; });
 
 websocket = nodeRequire("websocket");
 define("websocket", [], function () { return websocket });
-

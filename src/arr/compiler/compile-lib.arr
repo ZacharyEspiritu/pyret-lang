@@ -470,6 +470,19 @@ fun is-error-compilation(cr):
   is-module-as-string(cr) and CS.is-err(cr.result-printer)
 end
 
+fun get-ugly-source(ws :: List<ToCompile>, prog :: CompiledProgram, realm :: L.Realm, runtime :: R.Runtime, options):
+  compiled-mods = prog.loadables
+  errors = compiled-mods.filter(is-error-compilation)
+  cases(List) errors block:
+    | empty =>
+      #print("Make standalone program\n")
+      program = make-standalone(ws, prog, options)
+      right(program.v.js-ast.to-ugly-source())
+    | link(_, _) =>
+      left(errors.map(_.result-printer))
+  end
+end
+
 fun run-program(ws :: List<ToCompile>, prog :: CompiledProgram, realm :: L.Realm, runtime :: R.Runtime, options):
   compiled-mods = prog.loadables
   errors = compiled-mods.filter(is-error-compilation)
@@ -520,7 +533,7 @@ fun make-standalone(wl, compiled, options):
   natives = for fold(natives from empty, w from wl):
     w.locator.get-native-modules().map(_.path) + natives
   end
-  
+
   var all-compile-problems = empty
   static-modules = j-obj(for C.map_list(w from wl):
       loadable = compiled.modules.get-value-now(w.locator.uri())

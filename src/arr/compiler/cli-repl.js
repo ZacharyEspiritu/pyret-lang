@@ -5,20 +5,25 @@
   theModule: function(runtime, namespace, uri, nativeRepl) {
     function startRepl(pyretRepl, restarter) {
       var runInteractions = runtime.getField(pyretRepl, "run-interaction");
+      var restartInteractions = runtime.getField(pyretRepl, "restart-interactions");
+
       function runUsingPyretRepl(src, context, filename, callback) {
         return runtime.runThunk(function() {
             return runInteractions.app(src);
           },
           function(result) {
             if(runtime.isSuccessResult(result)) {
+              console.log(result);
               callback(null, result.result.dict.v.val.result.result.dict.answer);
             }
             else {
-              callback(null, result);
+              console.log(result);
+              callback(new nativeRepl.Recoverable(result));
+              // callback(null, result);
             }
           });
       }
-      var restartInteractions = runtime.getField(pyretRepl, "restart-interactions");
+
       return runtime.safeCall(function() {
           // need to convert definitions to JS string?
           var definitions = runtime.getField(pyretRepl, "definitions");
@@ -37,6 +42,7 @@
           });
         });
     }
+
     return runtime.makeModuleReturn({
       start: runtime.makeFunction(function(pyretRepl, options) {
         return runtime.pauseStack(function(restarter) {
@@ -49,6 +55,5 @@
         });
       })
     }, {});
-
   }
 })

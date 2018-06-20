@@ -36,6 +36,10 @@
       "websocket": "empty:",
       "source-map": "empty:",
       "stacktrace-js": "empty:",
-      "repl": "empty:"
+      "repl": "empty:",
+      "jp-kernel": "empty:",
+      "uuid": "empty:",
+      "jmp": "empty:",
+      "nel": "empty:"
     }
 }

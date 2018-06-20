@@ -237,6 +237,30 @@ fun make-repl<a>(
     result
   end
 
+  fun run-kernel-interaction(repl-locator :: CL.Locator) block:
+    worklist = CL.compile-worklist(finder, repl-locator, compile-context)
+    compiled = CL.compile-program-with(worklist, current-modules, current-compile-options)
+    for SD.each-key-now(k from compiled.modules) block:
+      m = compiled.modules.get-value-now(k)
+      current-modules.set-now(k, compiled.modules.get-value-now(k))
+    end
+    result = CL.run-program(worklist, compiled, current-realm, runtime, current-compile-options)
+    cases(Either) result:
+      | right(answer) =>
+        when L.is-success-result(answer):
+          update-env(answer, repl-locator, compiled.loadables.last())
+        end
+      | left(err) =>
+        nothing
+    end
+
+    source = CL.get-ugly-source(worklist, compiled, current-realm, runtime, current-compile-options)
+    cases(Either) source block:
+      | right(code) => code
+      | left(err) => err
+    end
+  end
+
   fun run-interaction(repl-locator :: CL.Locator) block:
     worklist = CL.compile-worklist(finder, repl-locator, compile-context)
     compiled = CL.compile-program-with(worklist, current-modules, current-compile-options)
@@ -332,6 +356,7 @@ fun make-repl<a>(
     make-interaction-locator: make-interaction-locator,
     make-definitions-locator: make-definitions-locator,
     run-interaction: run-interaction,
-    runtime: runtime
+    runtime: runtime,
+    run-kernel-interaction: run-kernel-interaction
   }
 end

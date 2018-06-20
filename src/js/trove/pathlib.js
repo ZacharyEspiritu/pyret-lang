@@ -55,6 +55,5 @@
       "path-sep": RUNTIME.makeString(path.sep)
     };
     return RUNTIME.makeModuleReturn(values, {});
-  }    
+  }
 })
-
