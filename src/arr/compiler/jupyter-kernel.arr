@@ -23,6 +23,11 @@ fun restart-interactions(src):
   repl.restart-interactions(i, CS.default-compile-options)
 end
 
+fun run-interaction(src):
+  i = repl.make-interaction-locator(lam(): src end)
+  repl.run-interaction(i)
+end
+
 fun get-run-answer(res):
   cases(Either) res block:
     | right(ans) => ans
@@ -33,45 +38,8 @@ fun get-run-answer(res):
       end
   end
 end
-
-fun run-interaction(src):
-  i = repl.make-interaction-locator(lam(): src end)
-  repl.run-interaction(i)
-end
-
-fun test(src):
-  locator = repl.make-interaction-locator(lam(): src end)
-  result  = repl.run-interaction(locator)
-
-  cases (Either) result block:
-    | left(errors) =>
-      print-error("Expected an answer, but got compilation errors:")
-      for lists.each(e from errors):
-        print-error(tostring(e))
-      end
-
-    | right(answer) =>
-      if L.is-success-result(answer):
-        to-repr(answer)
-      else:
-        L.render-error-message(answer)
-      end
-  end
-end
-
-fun run-and-repr(src) -> String:
-  result = run-interaction(src)
-  value = L.get-result-answer(get-run-answer(result))
-
-  cases (Option) value:
-    | some(val) => to-repr(val)
-    | none => ""
-  end
-end
-
 CK.start({
   restart-interactions: restart-interactions,
   run-interaction: run-interaction,
-  run-and-repr: run-and-repr,
   repl: repl
 })

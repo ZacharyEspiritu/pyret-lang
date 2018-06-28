@@ -217,10 +217,6 @@
     }
 
     function startKernel(pyretRepl, restarter) {
-      // Grab pyret REPL interfaces
-      var runInteractions = runtime.getField(pyretRepl, "run-interaction");
-      var restartInteractions = runtime.getField(pyretRepl, "restart-interactions");
-      var runAndRepr = runtime.getField(pyretRepl, "run-and-repr");
 
       // Setup logging helpers
       var log;
@@ -339,6 +335,10 @@
           task.beforeRun();
         }
 
+        // Grab pyret REPL interfaces
+        var runInteractions = runtime.getField(pyretRepl, "run-interaction");
+        var restartInteractions = runtime.getField(pyretRepl, "restart-interactions");
+
         function runInPyretRepl(input) {
           return new Promise((resolve, reject) => {
             const ffi = runtime.ffi;
@@ -368,7 +368,7 @@
                     }, function(runResult) {
                       if (runtime.isSuccessResult(runResult)) {
                         runtime.runThunk(() => {
-                          return runtime.toReprJS(runResult.result, runtime.ReprMethods["$kernel"]);
+                          return runtime.toReprJS(runResult.result, runtime.ReprMethods._torepr);// runtime.ReprMethods["$kernel"]);
                         }, function(reprResult) {
                           if (runtime.isSuccessResult(reprResult)) {
                             resolve(reprResult.result);
