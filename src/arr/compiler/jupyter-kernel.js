@@ -340,71 +340,17 @@
         }
 
         function runInPyretRepl(input) {
-          // return new Promise((resolve, reject) => {
-          //   runtime.runThunk(() => {
-          //     return runInteractions.app(input)
-          //   }, (res) => {
-          //     try {
-          //       if (runtime.isSuccessResult(res)) {
-          //         console.log("success!");
-          //         console.log(res.result);
-          //         runtime.runThunk(() => {
-          //           return runtime.getField(res.result, "answer");
-          //         }, (answer) => {
-          //           answer = answer.result;
-          //           var rendered = renderValue(runtime, answer);
-          //           resolve(rendered);
-          //         });
-          //       }
-          //       else {
-          //         console.log("exception!");
-          //         var exception = res.exn;
-          //         reject(exception);
-          //       }
-          //     }
-          //     catch (e) {
-          //       console.log("error!");
-          //       reject(e);
-          //     }
-          //   });
-          // });
-
-          runtime.setStdout((str) => {
-            console.log("STDOUT: " + str);
-          });
-
-          // console.log(input);
           return new Promise((resolve, reject) => {
-            // runtime.runThunk(function() {
-            //     return runAndRepr.app(input);
-            //   }, function(res) {
-            //     // runtime.getField(loadLib, "internal").getModuleResultResult(res);
-            //     if (runtime.isSuccessResult(res)) {
-            //       console.log(res.result);
-            //       resolve(res.result);
-            //     }
-            //     else {
-            //       console.log(res.exn);
-            //       reject(res.exn);
-            //     }
-            //   })
-
             const ffi = runtime.ffi;
 
             runtime.runThunk(function() {
               return runInteractions.app(input)
             }, function(result) {
-              // console.log("REPL:");
-              // console.log(result);
               if (runtime.isFailureResult(result)) {
-                // TODO(Zachary): work on error formatting
                 reject(result);
               }
               else if (runtime.isSuccessResult(result)) {
-                // TODO(Zachary): implement displaying rich results
-                // console.log("FIRST: " + JSON.stringify(result, null, 2));
                 result = result.result;
-                // console.log("FIRST: " + JSON.stringify(result, null, 4));
                 return ffi.cases(ffi.isEither, "is-Either", result, {
                   left: function(compileErrors) {
                     const errors = ffi.toArray(compileErrors).reduce((errors, error) => {
@@ -413,45 +359,17 @@
                       return errors;
                     }, []);
 
-                    // console.log(errors);
                     reject(new Error(errors));
-
-                    // TODO: Render errors
                   },
                   right: function(v) {
                     runtime.runThunk(() => {
                       var rr = runtime.getField(loadLib, "internal").getModuleResultAnswer(v);
-                      // console.log("Time to run compiled program:", JSON.stringify(rr.stats));
-                      // console.log(runtime.getField(loadLib, "internal").getModuleResultResult(v).result.dict);
-                      // console.log(runtime.getField(loadLib, "internal").getModuleResultAnswer(v));
-                      // console.log("PROVIDE: " + runtime.getField(
-                            // runtime.getField(
-                              // runtime.getField(rr, "provide-plus-types"), "values"), "repl").val);
                       return rr;
                     }, function(runResult) {
-                      // console.log("OBJECT)");
-                      // console.log(runtime.makeObject(runResult));
-                      // console.log(runResult);
-                      // console.log(runResult.result);
-                      // console.log(runResult.result.result);
-                      // console.log(runResult.result.result.dict["provide-plus-types"]);
-                      // console.log(runtime.getField(runResult.result.result, "provide-plus-types"));
-                      // if (runtime.isBase(runResult.result.result)) {
-                        // console.log("PYRET");
-                      // }
-                      // else {
-                        // console.log("NOT PYRET");
-                      // }
-
                       if (runtime.isSuccessResult(runResult)) {
                         runtime.runThunk(() => {
-                          // console.log("OBJECT:");
-                          // console.log(runtime.makeObject(runResult.result));
-                          // console.log(runResult.result);
-                          // console.log("ANSWER 2: " + runtime.toReprJS(runResult.result, runtime.ReprMethods["$kernel"]));
                           return runtime.toReprJS(runResult.result, runtime.ReprMethods["$kernel"]);
                         }, function(reprResult) {
-                          // console.log(reprResult);
                           if (runtime.isSuccessResult(reprResult)) {
                             resolve(reprResult.result);
                           }
@@ -463,200 +381,21 @@
                         reject(new Error(v));
                       }
                     });
-                    // runtime.runThunk(function() {
-                    //   return runtime.getField(loadLib, "internal").getModuleResultResult(value);
-                    //   // console.log(runResult);
-                    // }, function(moduleResult) {
-                    //   console.log(moduleResult);
-                    //   if (runtime.isSuccessResult(moduleResult)) {
-
-                    //     console.log("success");
-                    //     const answer = runtime.getField(loadLib, "internal").getModuleResultAnswer(value);
-                    //     console.log(answer);
-
-                    //     runtime.runThunk(function() {
-                    //       console.log("MODULE: " + runtime.toReprJS(moduleResult, runtime.ReprMethods["$kernel"]));
-                    //       console.log("VALUE: " + runtime.toReprJS(value, runtime.ReprMethods["$kernel"]));
-                    //       return runtime.toReprJS(result, runtime.ReprMethods["$kernel"]);
-                    //     }, function(container) {
-                    //       if(runtime.isSuccessResult(container)) {
-                    //         resolve(container.result);
-                    //       }
-                    //       else {
-                    //         // reject($("<span>").addClass("error").text("<error displaying value: details logged to console>"));
-                    //         reject(container.exn);
-                    //       }
-                    //     });
-
-                    //     // runtime.runThunk(
-                    //     //   () => runtime.toReprJS(answer, runtime.ReprMethods._torepr),
-                    //     //   renderResult => {
-                    //     //     if(runtime.isSuccessResult(renderResult)) {
-                    //     //       resolve(renderResult.result);
-                    //     //     }
-                    //     //     else {
-                    //     //       console.error("Could not render: ", answer, " because ", renderResult);
-                    //     //       reject(new Error("An error occurred while rendering a value, details logged to console"));
-                    //     //     }
-                    //     //   });
-                    //   } else {
-                    //     console.log("error");
-                    //     reject(new Error(moduleResult));
-                    //   }
-                    // });
                   }
                 });
               }
               else {
                 reject(result);
-                // TODO(Zachary): handle case where non-Pyret result was returned
               }
 
               resolve("TODO");
             });
           });
-
-          // callingRuntime.runThunk(function() {
-          //   console.log("Full time including compile/load:", JSON.stringify(result.stats));
-          //   if(callingRuntime.isFailureResult(result)) {
-          //     didError = true;
-          //     // Parse Errors
-          //     // `renderAndDisplayError` must be called on the pyret stack
-          //     // this application runs in the context of the above `callingRuntime.runThunk`
-          //     return renderAndDisplayError(callingRuntime, result.exn.exn, undefined, true, result);
-          //   }
-          //   else if(callingRuntime.isSuccessResult(result)) {
-          //     result = result.result;
-          //     return ffi.cases(ffi.isEither, "is-Either", result, {
-          //       left: function(compileResultErrors) {
-          //         closeAnimationIfOpen();
-          //         didError = true;
-          //         // Compile Errors
-          //         var errors = ffi.toArray(compileResultErrors).
-          //           reduce(function (errors, error) {
-          //               Array.prototype.push.apply(errors,
-          //                 ffi.toArray(runtime.getField(error, "problems")));
-          //               return errors;
-          //             }, []);
-          //         // `safeCall` must be called on the pyret stack
-          //         // this application runs in the context of the above `callingRuntime.runThunk`
-          //         return callingRuntime.safeCall(
-          //           function() {
-          //             // eachLoop must be called in the context of the pyret stack
-          //             // this application runs in the context of the above `callingRuntime.runThunk`
-          //             return callingRuntime.eachLoop(runtime.makeFunction(function(i) {
-          //               // `renderAndDisplayError` must be called in the context of the
-          //               // pyret stack.
-          //               return renderAndDisplayError(callingRuntime, errors[i], [], true, result);
-          //             }), 0, errors.length);
-          //           }, function (result) { return result; }, "renderMultipleErrors");
-          //       },
-          //       right: function(v) {
-          //         // TODO(joe): This is a place to consider which runtime level
-          //         // to use if we have separate compile/run runtimes.  I think
-          //         // that loadLib will be instantiated with callingRuntime, and
-          //         // I think that's correct.
-          //         return callingRuntime.pauseStack(function(restarter) {
-          //           rr.runThunk(function() {
-          //             var runResult = rr.getField(loadLib, "internal").getModuleResultResult(v);
-          //             console.log("Time to run compiled program:", JSON.stringify(runResult.stats));
-          //             if(rr.isSuccessResult(runResult)) {
-          //               return rr.safeCall(function() {
-          //                 return checkUI.drawCheckResults(output, CPO.documents, rr,
-          //                                                 runtime.getField(runResult.result, "checks"), v);
-          //               }, function(_) {
-          //                 outputPending.remove();
-          //                 outputPendingHidden = true;
-          //                 return true;
-          //               }, "rr.drawCheckResults");
-          //             } else {
-          //               didError = true;
-          //               // `renderAndDisplayError` must be called in the context of the pyret stack.
-          //               // this application runs in the context of the above `rr.runThunk`.
-          //               return renderAndDisplayError(resultRuntime, runResult.exn.exn,
-          //                                            runResult.exn.pyretStack, true, runResult);
-          //             }
-          //           }, function(_) {
-          //             restarter.resume(callingRuntime.nothing);
-          //           });
-          //         });
-          //       }
-          //     });
-          //   }
-          //   else {
-          //     doneDisplay.reject("Error displaying output");
-          //     console.error("Bad result: ", result);
-          //     didError = true;
-          //     // `renderAndDisplayError` must be called in the context of the pyret stack.
-          //     // this application runs in the context of `callingRuntime.runThunk`
-          //     return renderAndDisplayError(
-          //       callingRuntime,
-          //       ffi.InternalError("Got something other than a Pyret result when running the program.",
-          //                         ffi.makeList(result)));
-          //   }
-          // }, function(_) {
-          //   if (didError) {
-          //     var snippets = output.find(".CodeMirror");
-          //     for (var i = 0; i < snippets.length; i++) {
-          //       snippets[i].CodeMirror.refresh();
-          //     }
-          //   }
-          //   doneDisplay.resolve("Done displaying output");
-          //   return callingRuntime.nothing;
-          // });
-
-          // var get = runtime.getField;
-          // return new Promise((resolve, reject) => {
-          //   runtime.runThunk(
-          //     () => run(bytecode),
-          //     (runResult) => {
-          //       // NOTE(joe): success here means the run succeeded, and will report
-          //       // both passing and failing tests, along with a final value
-
-          //       // Just doing a barebones dive to retrieve and return the toRepr of
-          //       // the final value for now, but there are lots of juicy things on
-          //       // this result, and it's something we should build out an API for.
-          //       var innerResult = runResult.result.val.result;
-          //       if (runtime.isSuccessResult(innerResult)) {
-          //         toReprOrDie(
-          //           get(innerResult.result, "answer"),
-          //           (renderedResult) => {
-          //             onResult(renderedResult);
-          //             resolve(renderedResult);
-          //           },
-          //           reject
-          //         );
-          //       } else {
-          //         toReprErrorOrDie(innerResult.exn.exn, reject);
-          //       }
-          //     });
-          // });
-
-          // return new Promise((resolve, reject) => {
-          //   runtime.runThunk(() => {
-          //     return runInteractions.app(input);
-          //   }, (runResult) => {
-          //     try {
-          //       var innerResult = runResult.result.val.result;
-          //       if (runtime.isSuccessResult(innerResult)) {
-          //         toReprOrDie(runtime.getField(innerResult.result, "answer"), resolve, reject);
-          //       } else {
-          //         toReprErrorOrDie(innerResult.exn.exn, reject);
-          //       }
-          //     }
-          //     catch (err) {
-          //       reject(err);
-          //     }
-          //   });
-          // });
-
         };
 
         await runInPyretRepl(task.code).then(result => {
-          // TODO(Zachary): figure out if ignoring `onStdout` interferes with
-          // command-line file redirection, etc.
           if (task.onStdout) {
-            // task.onStdout(result);
+            // ignoring for now
           }
           else {
             log("SESSION: RECEIVED: STDOUT: Missing stdout callback");
