@@ -1,74 +1,12 @@
 ({
   requires: [
-    { "import-type": "dependency", protocol: "file", args: ["compile-structs.arr"] },
     { "import-type": "builtin", name: "load-lib" }
   ],
   provides: {},
   nativeRequires: ["fs", "path", "uuid", "jmp", "pyret-base/js/js-numbers"],
-  theModule: function(runtime, namespace, uri, compileStructs, loadLib, fs, path, uuid, jmp, jsnums) {
+  theModule: function(runtime, namespace, uri, loadLib, fs, path, uuid, jmp, jsnums) {
 
-    function makeJsRepl(repl) {
-      var gf = runtime.getField;
-      var gmf = function(m, f) { return gf(gf(m, "values"), f); };
-      var replGlobals = gmf(compileStructs, "standard-globals");
-      var defaultOptions = gmf(compileStructs, "default-compile-options");
-
-      var getDefsForPyret = function(source) {
-        return runtime.makeFunction(function() {
-          return source;
-        });
-      };
-
-      var jsRepl = {
-        /*
-          This should not be called while a Pyret stack is running
-        */
-        restartInteractions: function(source) {
-          return new Promise((resolve, reject) => {
-            runtime.runThunk(function() {
-              return runtime.safeCall(
-                function() {
-                  return gf(repl, "make-definitions-locator").app(getDefsForPyret(source), replGlobals);
-                },
-                function(locator) {
-                  return gf(repl, "restart-interactions").app(locator, defaultOptions);
-                }, "restart-interactions:make-definitions-locator");
-            }, function(result) {
-              resolve(result);
-            });
-          });
-        },
-        run: function(str) {
-          return new Promise((resolve, reject) => {
-            runtime.runThunk(function() {
-              return runtime.safeCall(
-                function() {
-                  return gf(repl, "make-interaction-locator").app(runtime.makeFunction(function() { return str; }));
-                },
-                function(locator) {
-                  return gf(repl, "run-interaction").app(locator);
-                }, "run:make-interaction-locator");
-            }, function(result) {
-              console.log(result);
-              resolve(result);
-            }, "make-interaction-locator");
-          });
-        },
-        pause: function(afterPause) {
-          runtime.schedulePause(function(resumer) {
-            afterPause(resumer);
-          });
-        },
-        stop: function() {
-          runtime.breakAll();
-        },
-        runtime: runtime
-      };
-
-      return jsRepl;
-    }
-
-    function installRenderers(runtime) {
+    function installRenderers() {
       if (!runtime.ReprMethods.createNewRenderer("$kernel", runtime.ReprMethods._torepr)) return;
 
       function sooper(renderers, valType, val) {
@@ -284,8 +222,6 @@
       var restartInteractions = runtime.getField(pyretRepl, "restart-interactions");
       var runAndRepr = runtime.getField(pyretRepl, "run-and-repr");
 
-      console.log("ASDFASDF");
-
       // Setup logging helpers
       var log;
       var dontLog = function dontLog() {};
@@ -300,10 +236,7 @@
       var zmq = jmp.zmq; // ZMQ bindings
 
       // Install renderers
-      var jsRepl = makeJsRepl(runtime.getField(pyretRepl, "repl"));
-      console.log("ASDFASDF");
-      installRenderers(jsRepl.runtime);
-      console.log("ASDFASDF");
+      installRenderers();
 
       function Session(config) {
         config = config || {};
@@ -406,7 +339,6 @@
           task.beforeRun();
         }
 
-
         function runInPyretRepl(input) {
           // return new Promise((resolve, reject) => {
           //   runtime.runThunk(() => {
@@ -459,12 +391,14 @@
 
             const ffi = runtime.ffi;
 
-            jsRepl.run(input).then((result) => {
+            runtime.runThunk(function() {
+              return runInteractions.app(input)
+            }, function(result) {
               // console.log("REPL:");
               // console.log(result);
               if (runtime.isFailureResult(result)) {
                 // TODO(Zachary): work on error formatting
-                reject(result.exn);
+                reject(result);
               }
               else if (runtime.isSuccessResult(result)) {
                 // TODO(Zachary): implement displaying rich results
@@ -490,6 +424,9 @@
                       // console.log("Time to run compiled program:", JSON.stringify(rr.stats));
                       // console.log(runtime.getField(loadLib, "internal").getModuleResultResult(v).result.dict);
                       // console.log(runtime.getField(loadLib, "internal").getModuleResultAnswer(v));
+                      // console.log("PROVIDE: " + runtime.getField(
+                            // runtime.getField(
+                              // runtime.getField(rr, "provide-plus-types"), "values"), "repl").val);
                       return rr;
                     }, function(runResult) {
                       // console.log("OBJECT)");
@@ -577,12 +514,6 @@
 
               resolve("TODO");
             });
-
-            // runtime.runThunk(function() {
-            //   return runInteractions.app(input)
-            // }, function(result) {
-
-            // });
           });
 
           // callingRuntime.runThunk(function() {
@@ -1579,7 +1510,7 @@
         log("Restarting kernel");
 
         runtime.runThunk(function() {
-          return jsRepl.restartInteractions("");
+          return restartInteractions.app("");
         }, function(result) {
           this._initSession();
           if (restartCB) {
@@ -1590,7 +1521,7 @@
 
       // Actually setting up the kernel now
       runtime.runThunk(function() {
-        return jsRepl.restartInteractions("");
+        return restartInteractions.app("");
       }, function(result) {
         const tmpFile = ".pyret-kernel.tmp";
         const config = JSON.parse(fs.readFileSync(tmpFile));
