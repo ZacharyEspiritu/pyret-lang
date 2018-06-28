@@ -353,13 +353,8 @@
                 result = result.result;
                 return ffi.cases(ffi.isEither, "is-Either", result, {
                   left: function(compileErrors) {
-                    const errors = ffi.toArray(compileErrors).reduce((errors, error) => {
-                      const problems = ffi.toArray(runtime.getField(error, "problems"));
-                      Array.prototype.push.apply(errors, problems);
-                      return errors;
-                    }, []);
-
-                    reject(new Error(errors));
+                    // naively ignoring compile errors for now
+                    reject(new Error(compileErrors));
                   },
                   right: function(v) {
                     runtime.runThunk(() => {
@@ -387,8 +382,6 @@
               else {
                 reject(result);
               }
-
-              resolve("TODO");
             });
           });
         };
