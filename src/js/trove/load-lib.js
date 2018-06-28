@@ -243,18 +243,18 @@
         var rendererror = execRt.getField(rendererrorMod, "provide-plus-types");
         var gf = execRt.getField;
         execRt.runThunk(function() {
-          if(execRt.isPyretVal(res.exn.exn) 
-             && execRt.isObject(res.exn.exn) 
+          if(execRt.isPyretVal(res.exn.exn)
+             && execRt.isObject(res.exn.exn)
              && execRt.hasField(res.exn.exn, "render-reason")) {
             return execRt.safeCall(
-              function() { 
+              function() {
                 return execRt.getColonField(res.exn.exn, "render-reason").full_meth(res.exn.exn);
               }, function(reason) {
                 return execRt.safeCall(
-                  function() { 
+                  function() {
                     return gf(gf(rendererror, "values"), "display-to-string").app(
-                      reason, 
-                      execRt.namespace.get("torepr"), 
+                      reason,
+                      execRt.namespace.get("torepr"),
                       execRt.ffi.makeList(res.exn.pyretStack.map(execRt.makeSrcloc)));
                   }, function(str) {
                     return execRt.string_append(
