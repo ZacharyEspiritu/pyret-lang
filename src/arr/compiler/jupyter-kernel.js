@@ -238,94 +238,12 @@
       console.log("STARTING KERNEL");
 
       function makeRepl() {
-        var pyMakeRepl            = runtime.getField(pyretRepl, "make-repl");
-
-        var pyRuntime = runtime.getField(runtime.getField(runtimeLib, "internal").brandRuntime, "brand").app(
-          runtime.makeObject({
-            "runtime": runtime.makeOpaque(runtime)
-          }));
-
-        var getDefsForPyret = function(source) {
-          return runtime.makeFunction(function() {
-            return source;
-          });
-        };
-        var gmf = function(m, f) { return runtime.getField(runtime.getField(m, "values"), f); };
-        var replGlobals    = gmf(compileStructs, "standard-globals");
-        var defaultOptions = gmf(compileStructs, "default-compile-options");
+        var pyMakeRepl = runtime.getField(pyretRepl, "make-repl");
 
         return runtime.safeCall(function() {
-          return pyMakeRepl.app(pyRuntime);
+          return pyMakeRepl.app();
         }, function(repl) {
           var jsRepl = {
-            runtime: runtime.getField(pyRuntime, "runtime").val,
-            // restartInteractions: function(source) {
-            //   var pyOptions = defaultOptions.extendWith({
-            //     "type-check": false,
-            //     "check-all": false,
-            //   });
-            //   return new Promise((resolve, reject) => {
-            //     console.log("RESTART INTERACTIONS: " + source);
-            //     runtime.runThunk(function() {
-            //       var locator = runtime.getField(repl, "make-definitions-locator").app(getDefsForPyret(source), replGlobals);
-            //       return runtime.getField(repl, "restart-interactions").app(locator, pyOptions);
-            //       // return runtime.safeCall(
-            //       //   function() {
-            //       //     return
-            //       //   },
-            //       //   function(locator) {
-
-            //       //   }, "restart-interactions:make-definitions-locator");
-            //     }, function(result) {
-            //       console.log("RESULT: ");
-            //       console.log(result);
-            //       resolve(result);
-            //     });
-            //   });
-            // },
-            // runInteraction: function(str) {
-            //   return new Promise((resolve, reject) => {
-            //     console.log("RUN INTERACTION: " + str);
-            //     runtime.runThunk(function() {
-            //       var locator =  runtime.getField(repl, "make-interaction-locator").app(runtime.makeFunction(function() { return str; }));
-            //       return runtime.getField(repl, "run-interaction").app(locator);
-            //       // return runtime.safeCall(
-            //         // function() {
-            //         // },
-            //         // function(locator) {
-
-            //         // }, "run:make-interaction-locator");
-            //     }, function(result) {
-            //       console.log("RESULT: ");
-            //       console.log(result);
-            //       resolve(result);
-            //     });
-            //   });
-            // },
-
-            // restartInteractions: function(baseSrc) {
-            //   console.log("RESTART INTERACTIONS: " + baseSrc);
-            //   return new Promise((resolve, reject) => {
-            //     runtime.runThunk(function() {
-            //       return pyRestartInteractions.app(baseSrc, repl);
-            //     }, function(result) {
-            //       console.log("DONE");
-            //       resolve(result);
-            //     });
-            //   });
-            // },
-            // runInteraction: function(src) {
-            //   console.log("RUN INTERACTION: " + src);
-            //   return new Promise((resolve, reject) => {
-            //     runtime.runThunk(function() {
-            //       return pyRunInteraction.app(src, repl);
-            //     }, function(result) {
-            //       console.log("DONE");
-            //       resolve(result);
-            //     });
-            //   });
-            // },
-
             restartInteractions: function(src) {
               console.log("RESTART INTERACTIONS: " + src);
               return new Promise(function(resolve, reject) {
@@ -344,20 +262,11 @@
                   return runtime.getField(repl, "run-interaction").app(src);
                 }, function(result) {
                   console.log("DONE");
-                  var newRuntime = runtime.getField(runtime.getField(repl, "new-runtime"), "runtime").val;
-                  console.log(newRuntime);
-                  console.log("DICT.V");
-                  console.log(newRuntime.toReprJS(result.result.dict.v, newRuntime.ReprMethods._torepr));
-                  var rr = runtime.getField(loadLib, "internal").getModuleResultResult(result.result.dict.v);
-                  console.log("RUNRR");
-                  console.log(rr.result.dict.answer);
-                  var res = newRuntime.toReprJS(rr.result.dict.answer, newRuntime.ReprMethods._torepr);
-                  console.log(res);
-                  resolve(res);
+                  resolve(result);
                 });
               });
             },
-            runtime: runtime
+            runtime: runtime.getField(runtime.getField(repl, "new-runtime"), "runtime").val
           };
           return jsRepl;
         }, "make-repl");
@@ -497,106 +406,51 @@
             const ffi = runtime.ffi;
 
             repl.runInteraction(input).then((result) => {
-              resolve(result);
-              // console.log("RESULT: ");
-              // console.log(result);
-              // if (runtime.isFailureResult(result)) {
-              //   reject(result);
-              // }
-              // else if (runtime.isSuccessResult(result)) {
-              //   result = result.result;
-              //   console.log("NESTED RESULT:");
-              //   console.log(result);
-              //   return ffi.cases(ffi.isEither, "is-Either", result, {
-              //     left: function(compileErrors) {
-              //       // naively ignoring compile errors for now
-              //       reject(new Error(compileErrors));
-              //     },
-              //     right: function(v) {
-              //       console.log("VALUE:");
-              //       console.log(v);
+              if (runtime.isFailureResult(result)) {
+                var reason = result.exn;
+                reject(reason);
+              }
+              else if (runtime.isSuccessResult(result)) {
+                result = result.result;
+                return ffi.cases(ffi.isEither, "is-Either", result, {
+                  left: function(compileErrors) {
+                    console.log("left");
+                    var errors = ffi.toArray(compileErrors).reduce(function (errors, error) {
+                        Array.prototype.push.apply(errors,
+                          ffi.toArray(runtime.getField(error, "problems")));
+                        return errors;
+                      }, []);
+                    console.log(errors);
+                    reject(errors);
+                  },
+                  right: function(v) {
+                    var replRuntime  = repl.runtime;
+                    var loadInternal = runtime.getField(loadLib, "internal");
+                    var moduleResult = loadInternal.getModuleResultResult(v);
 
-              //       resolve(v);
-              //     }
-              //   });
-              // }
-              // else {
-              //   reject(result);
-              // }
+                    if (replRuntime.isFailureResult(moduleResult)) {
+                      console.log("right-failure");
+                      reject(moduleResult.exn);
+                    }
+                    else if (replRuntime.isSuccessResult(moduleResult)) {
+                      console.log("right-success");
+                      var runValue   = moduleResult.result;
+                      var runAnswer  = replRuntime.getField(runValue, "answer");
+                      var reprOutput = replRuntime.toReprJS(runAnswer, replRuntime.ReprMethods._torepr);
+                      resolve(reprOutput);
+                    }
+                    else {
+                      reject("Bad result: " + moduleResult);
+                    }
+                  }
+                });
+              }
+              else {
+                reject("Bad result: " + result);
+              }
             }, (err) => {
-              console.error("couldn't run:");
-              console.error(err);
-            })
-
-            // runtime.runThunk(function() {
-            //   console.log("RUNTHUNK: " + input);
-            //   return repl.runInteraction(input);
-            // }, function(result) {
-            //   console.log("RESULT: ");
-            //   console.log(result);
-            //   if (runtime.isFailureResult(result)) {
-            //     reject(result);
-            //   }
-            //   else if (runtime.isSuccessResult(result)) {
-            //     result = result.result;
-            //     console.log("NESTED RESULT:");
-            //     console.log(result);
-            //     return ffi.cases(ffi.isEither, "is-Either", result, {
-            //       left: function(compileErrors) {
-            //         // naively ignoring compile errors for now
-            //         reject(new Error(compileErrors));
-            //       },
-            //       right: function(v) {
-            //         console.log("VALUE:");
-            //         console.log(v);
-
-            //         resolve(v);
-
-            //         // replRuntime.runThunk(() => {
-            //         //   return replRuntime.toReprJS(v, runtime.ReprMethods._torepr);
-            //         // }, function (reprResult) {
-            //         //   console.log("REPR:");
-            //         //   console.log(reprResult);
-            //         //   resolve(reprResult);
-            //         // });
-
-            //         // runtime.runThunk(() => {
-            //         //   var rr = runtime.getField(loadLib, "internal").getModuleResultResult(v);
-            //         //   return rr;
-            //         // }, function(runResult) {
-            //         //   console.log("RUN RESULT:");
-            //         //   console.log(runResult);
-            //         //   if (runtime.isSuccessResult(runResult)) {
-            //         //     console.log("NESTED RUN RESULT:");
-            //         //     console.log(runResult.result);
-            //         //     runtime.runThunk(() => {
-            //         //       console.log(runtime.toReprJS(runResult, runtime.ReprMethods["$kernel"]));
-            //         //       console.log(runtime.toReprJS(runResult.result, runtime.ReprMethods["$kernel"]));
-            //         //       console.log(runtime.toReprJS(result, runtime.ReprMethods["$kernel"]));
-            //         //       console.log(runtime.toReprJS(v, runtime.ReprMethods["$kernel"]));
-            //         //       return runtime.toReprJS(runResult, runtime.ReprMethods["$kernel"]);// runtime.ReprMethods["$kernel"]);
-            //         //     }, function(reprResult) {
-            //         //       console.log("REPR RESULT");
-            //         //       console.log(reprResult);
-            //         //       console.log(reprResult.result);
-            //         //       if (runtime.isSuccessResult(reprResult)) {
-            //         //         resolve(reprResult.result);
-            //         //       }
-            //         //       else {
-            //         //         reject(reprResult.exn);
-            //         //       }
-            //         //     });
-            //         //   } else {
-            //         //     reject(new Error(v));
-            //         //   }
-            //         // });
-            //       }
-            //     });
-            //   }
-            //   else {
-            //     reject(result);
-            //   }
-            // });
+              reject("Unknown error: " + err);
+            });
           });
         };
 
@@ -636,7 +490,7 @@
           }
         }).catch(error => {
           if (task.onStderr) {
-            task.onStderr(error);
+            // task.onStderr(error);
           }
           else {
             log("SESSION: RECEIVED: STDERR: Missing stderr callback");
@@ -924,26 +778,26 @@
             // TODO (Zachary): determine if parsing of Pyret errors should happen
             // before onError is called or inside of onError itself
 
-            // request.respond(
-            //   this.shellSocket,
-            //   "execute_reply", {
-            //     status: "error",
-            //     execution_count: this.executionCount,
-            //     ename: result.error.name,
-            //     evalue: result.error.message,
-            //     traceback: result.error.toString(),
-            //   }
-            // );
+            request.respond(
+              this.shellSocket,
+              "execute_reply", {
+                status: "error",
+                execution_count: this.executionCount,
+                ename: "Error", //result.error.name,
+                evalue: "Message", //result.error.message,
+                traceback: ["Traceback"] //result.error.toString(),
+              }
+            );
 
-            // request.respond(
-            //   this.iopubSocket,
-            //   "error", {
-            //     execution_count: this.executionCount,
-            //     ename: result.error.name,
-            //     evalue: result.error.message,
-            //     traceback: result.error.toString(),
-            //   }
-            // );
+            request.respond(
+              this.iopubSocket,
+              "error", {
+                execution_count: this.executionCount,
+                ename: "Error", //result.error.name,
+                evalue: "Message", //result.error.message,
+                traceback: ["Traceback"] //result.error.toString(),
+              }
+            );
           }
 
           function onStdout(data) {
@@ -1469,6 +1323,8 @@
       // Actually setting up the kernel now
       log("SETTING UP KERNEL");
       repl.restartInteractions("").then((_) => {
+        return repl.runInteraction("");
+      }).then((_) => {
         log("REPL READY");
         const tmpFile = ".pyret-kernel.tmp";
         const config = JSON.parse(fs.readFileSync(tmpFile));
@@ -1488,11 +1344,6 @@
         console.error("Couldn't restart: ");
         console.error(err);
       });
-      // runtime.runThunk(function() {
-      //   return repl.restartInteractions("");
-      // }, function(result) {
-
-      // });
     }
 
     return runtime.makeModuleReturn({
