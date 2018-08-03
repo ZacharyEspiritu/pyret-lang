@@ -32,3 +32,11 @@ define("lockfile", [], function () { return lockfile; });
 websocket = nodeRequire("websocket");
 define("websocket", [], function () { return websocket });
 
+uuid = nodeRequire("uuid");
+define("uuid", [], function () { return uuid });
+
+jmp = nodeRequire("jmp");
+define("jmp", [], function () { return jmp });
+
+nel = nodeRequire("nel");
+define("nel", [], function () { return nel });

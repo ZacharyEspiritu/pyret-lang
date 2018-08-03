@@ -11,6 +11,7 @@ import file("compile-lib.arr") as CL
 import file("compile-structs.arr") as CS
 import file("locators/builtin.arr") as B
 import file("server.arr") as S
+import file("jupyter-kernel.arr") as K
 
 # this value is the limit of number of steps that could be inlined in case body
 DEFAULT-INLINE-CASE-LIMIT = 5
@@ -59,6 +60,8 @@ fun main(args :: List<String>) -> Number block:
       C.flag(C.once, "Add profiling information to the main file"),
     "check-all",
       C.flag(C.once, "Run checks all modules (not just the main module)"),
+    "kernel",
+      C.flag(C.once, "Start the Jupyter kernel"),
     "no-check-mode",
       C.flag(C.once, "Skip checks"),
     "allow-shadow",
@@ -155,6 +158,9 @@ fun main(args :: List<String>) -> Number block:
         else if r.has-key("serve"):
           port = r.get-value("port")
           S.serve(port)
+          success-code
+        else if r.has-key("kernel"):
+          K.start()
           success-code
         else if r.has-key("build-standalone"):
           print-error("Use build-runnable instead of build-standalone\n")
