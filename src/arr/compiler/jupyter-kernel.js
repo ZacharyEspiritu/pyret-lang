@@ -241,8 +241,6 @@
 
     function startKernel(pyretRepl, restarter) {
 
-      console.log("STARTING KERNEL");
-
       function makeRepl() {
         return runtime.safeCall(function() {
           return runtime.getField(pyretRepl, "make-repl").app();
@@ -250,34 +248,44 @@
           // Load REPL values from the returned Object:
           var pyRestartInteractions = runtime.getField(repl, "restart-interactions");
           var pyRunInteraction = runtime.getField(repl, "run-interaction");
+          var pyCheckParse = runtime.getField(repl, "check-parse");
           // Create JS interface to the Pyret REPL:
           var jsRepl = {
+            // String -> Either
+            // Clears the stored definitions in the REPL and loads src in
             restartInteractions: function(src) {
-              console.log("RESTART INTERACTIONS: " + src);
               return new Promise(function(resolve, _) {
                 runtime.runThunk(() => {
                   return pyRestartInteractions.app(src);
                 }, resolve);
               });
             },
+            // String -> Either
+            // Runs the src code in the REPL, and if successful, saves the
+            // definitions in the REPL environment
             runInteraction: function(src) {
-              console.log("RUN INTERACTION: " + src);
               return new Promise(function(resolve, _) {
                 runtime.runThunk(() => {
                   return pyRunInteraction.app(src);
                 }, resolve);
               });
             },
+            checkParse: function(src) {
+              return new Promise(function(resolve, _) {
+                runtime.runThunk(() => {
+                  return pyCheckParse.app(src);
+                }, resolve)
+              });
+            },
+            // The runtime environment used within the REPL
             runtime: runtime.getField(runtime.getField(repl, "new-runtime"), "runtime").val
           };
           return jsRepl;
         }, "make-repl");
       }
 
-      console.log("MAKING REPL");
       var repl = makeRepl();
       installRenderers(repl.runtime);
-      console.log("REPL READY");
 
 
       // Setup logging helpers
@@ -288,14 +296,12 @@
         console.error.apply(this, arguments);
       };
 
-      log = doLog;
+      log = dontLog;
 
       var Socket = jmp.Socket; // IPython/Jupyter protocol socket
       var zmq = jmp.zmq; // ZMQ bindings
 
       // Install renderers
-      log("INSTALLING RENDERERS");
-
       function Session(config) {
         config = config || {};
 
@@ -382,7 +388,7 @@
        *
        * @private
        */
-      Session.prototype._runNow = async function(task) {
+      Session.prototype._runNow = function(task) {
         var id = this._lastContextId + 1;
 
         log("SESSION: RUN: TASK:", id, task);
@@ -460,7 +466,6 @@
         }
 
         function runInPyretRepl(input) {
-          console.log("INPUT: " + input);
           return new Promise((resolve, reject) => {
             const ffi = runtime.ffi;
 
@@ -475,22 +480,18 @@
                 return ffi.cases(ffi.isEither, "is-Either", result, {
                   left: reject,
                   right: (interactionResult) => {
-                    console.log("right");
                     var replResult  = runtime.getField(interactionResult, "repl-result");
                     var checkResult = runtime.getField(interactionResult, "check-message");
-                    console.log(replResult);
-                    console.log(checkResult);
 
                     var replRuntime  = repl.runtime;
                     var loadInternal = runtime.getField(loadLib, "internal");
                     var moduleResult = loadInternal.getModuleResultResult(replResult);
 
                     if (replRuntime.isSuccessResult(moduleResult)) {
-                      console.log("right-success");
-                      var runValue   = moduleResult.result;
-                      var runAnswer  = replRuntime.getField(runValue, "answer");
-                      var replToRepr = replRuntime.ReprMethods["$kernel"];
-                      var reprOutput = replRuntime.toReprJS(runAnswer, replToRepr);
+                      var runValue    = moduleResult.result;
+                      var runAnswer   = replRuntime.getField(runValue, "answer");
+                      var replToRepr  = replRuntime.ReprMethods["$kernel"];
+                      var reprOutput  = replRuntime.toReprJS(runAnswer, replToRepr);
                       resolve({
                         reprOutput: reprOutput,
                         checkMessage: checkResult
@@ -528,7 +529,7 @@
             // TODO(Zachary): Needs to be updated to support multiple return
             // types other than plain text
             var bundle = {};
-            if (result.toString()) {
+            if (reprOutput.toString() && reprOutput !== "") {
               bundle["mime"] = {"text/plain": reprOutput};
             }
             task.onSuccess(bundle);
@@ -652,6 +653,93 @@
         }
 
         this._run(task);
+      };
+
+      /**
+       * Check if code is complete by checking if it parses
+       *
+       * @param {String}               code                 Code to execute in session
+       * @param                        [callbacks]
+       * @param {OnExecutionSuccessCB} [callbacks.onSuccess]
+       * @param {OnErrorCB}            [callbacks.onError]
+       * @param {BeforeRunCB}          [callbacks.beforeRun]
+       * @param {AfterRunCB}           [callbacks.afterRun]
+       * @param {OnStdioCB}            [callbacks.onStdout]
+       * @param {OnStdioCB}            [callbacks.onStderr]
+       * @param {OnDisplayCB}          [callbacks.onDisplay]
+       * @param {OnRequestCB}          [callbacks.onRequest]
+       */
+      Session.prototype.is_complete = async function(code, callbacks) {
+        log("SESSION: IS COMPLETE:", code);
+
+        var task = {
+          action: "run",
+          code: code,
+        };
+
+        if (callbacks) {
+          if (callbacks.onSuccess) {
+            task.onSuccess = callbacks.onSuccess;
+          }
+          if (callbacks.onError) {
+            task.onError = callbacks.onError;
+          }
+          if (callbacks.beforeRun) {
+            task.beforeRun = callbacks.beforeRun;
+          }
+          if (callbacks.afterRun) {
+            task.afterRun = callbacks.afterRun;
+          }
+          if (callbacks.onStdout) {
+            task.onStdout = callbacks.onStdout;
+          }
+          if (callbacks.onStderr) {
+            task.onStderr = callbacks.onStderr;
+          }
+          if (callbacks.onDisplay) {
+            task.onDisplay = callbacks.onDisplay;
+          }
+          if (callbacks.onRequest) {
+            task.onRequest = callbacks.onRequest;
+          }
+        }
+
+        if (task.beforeRun) {
+          task.beforeRun();
+        }
+
+        function isComplete(task) {
+          return new Promise((resolve, _) => {
+            repl.checkParse(task.code).then((parseResult) => {
+              if (runtime.isSuccessResult(parseResult)) {
+                parseResult = parseResult.result;
+                resolve(runtime.isPyretTrue(parseResult));
+              }
+              else {
+                resolve(false);
+              }
+            });
+          });
+        }
+
+        var codeComplete = await isComplete(task);
+
+        if (codeComplete) {
+          // Code parsed
+          if (task.onSuccess) {
+            task.onSuccess();
+          }
+        }
+        else {
+          // Code did not parse
+          if (task.onError) {
+            task.onError();
+          }
+        }
+
+        if (task.afterRun) {
+          task.afterRun();
+        }
       };
 
       /**
@@ -1021,6 +1109,49 @@
           status_idle.call(this, request);
         }
 
+        /**
+         * Handler for `execute_request` messages
+         *
+         * @param {module:jmp~Message} request Request message
+         * @this Kernel
+         */
+        function is_complete_request(request) {
+          var displayIds = {};
+
+          this.session.is_complete(request.content.code, {
+            onSuccess: onSuccess.bind(this),
+            onError: onError.bind(this),
+            beforeRun: beforeRun.bind(this),
+            afterRun: afterRun.bind(this),
+          });
+
+          function beforeRun() {
+            status_busy.call(this, request);
+          }
+
+          function afterRun() {
+            status_idle.call(this, request);
+          }
+
+          function onSuccess(result) {
+            request.respond(
+              this.shellSocket,
+              "is_complete_reply", {
+                status: "complete",
+              }
+            );
+          }
+
+          function onError(result) {
+            request.respond(
+              this.shellSocket,
+              "is_complete_reply", {
+                status: "incomplete",
+              }
+            );
+          }
+        }
+
         return {
           execute_request: execute_request,
           complete_request: complete_request,
@@ -1028,6 +1159,7 @@
           inspect_request: inspect_request,
           kernel_info_request: kernel_info_request,
           shutdown_request: shutdown_request,
+          is_complete_request: is_complete_request
         };
       }
 

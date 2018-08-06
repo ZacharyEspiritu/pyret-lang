@@ -9,6 +9,7 @@ import file as F
 import cmdline-lib as CL
 import render-error-display as RED
 import either as E
+import parse-pyret as PP
 
 import js-file("./jupyter-kernel") as JK
 
@@ -43,6 +44,8 @@ fun make-repl():
     maybe-result = repl.run-interaction(interaction-loc)
     cases (Either) maybe-result:
       | left(compile-errors) =>
+        # The kernel can only send one error at a time according to the protocol
+        # so we're just going to take the first possible error:
         cases (List) compile-errors:
           | empty => left("")
           | link(f, _) =>
@@ -52,7 +55,8 @@ fun make-repl():
                 cases (List) problems:
                   | empty => ""
                   | link(first-problem, _) =>
-                    left(RED.display-to-string(first-problem.render-reason(), torepr, empty))
+                    problem-reason = first-problem.render-reason()
+                    left(RED.display-to-string(problem-reason, torepr, empty))
                 end
             end
         end
@@ -68,9 +72,19 @@ fun make-repl():
     end
   end
 
+  fun check-parse(program :: String):
+    name = "parse-stub"
+    maybe-ast = PP.maybe-surface-parse(program, name)
+    cases(Either) maybe-ast:
+      | left(_) => false
+      | right(_) => true
+    end
+  end
+
   {
     restart-interactions: restart-interactions,
     run-interaction: run-interaction,
+    check-parse: check-parse,
     new-runtime: new-runtime
   }
 end
