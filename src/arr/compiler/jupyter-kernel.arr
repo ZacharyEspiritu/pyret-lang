@@ -8,7 +8,6 @@ import string-dict as SD
 import file as F
 import cmdline-lib as CL
 import render-error-display as RED
-
 import either as E
 
 import js-file("./jupyter-kernel") as JK
@@ -59,26 +58,20 @@ fun make-repl():
         end
       | right(result) =>
         if L.is-success-result(result):
-          right(result)
+          right({
+            repl-result: result,
+            check-message: L.render-check-results(result).message
+          })
         else:
-          right(result)
+          left(L.render-error-message(result).message)
         end
-    end
-  end
-
-  fun render-errors(compile-errors):
-    cases (List) compile-errors:
-      | empty => ""
-      | link(f, r) =>
-        RED.display-to-string(f.render-reason(), torepr, empty)
     end
   end
 
   {
     restart-interactions: restart-interactions,
     run-interaction: run-interaction,
-    new-runtime: new-runtime,
-    render-errors: render-errors
+    new-runtime: new-runtime
   }
 end
 

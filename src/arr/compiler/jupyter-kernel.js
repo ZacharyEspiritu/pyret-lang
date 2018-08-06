@@ -29,14 +29,14 @@
                       pyRepl, compileStructs, runtimeLib, fs, path, uuid,
                       jmp, jsnums) {
 
-    function installRenderers() {
-      if (!runtime.ReprMethods.createNewRenderer("$kernel", runtime.ReprMethods._torepr)) return;
+    function installRenderers(installRuntime) {
+      if (!installRuntime.ReprMethods.createNewRenderer("$kernel", installRuntime.ReprMethods._torepr)) return;
 
       function sooper(renderers, valType, val) {
         return renderers.__proto__[valType](val);
       }
 
-      var renderers = runtime.ReprMethods["$kernel"];
+      var renderers = installRuntime.ReprMethods["$kernel"];
       renderers["opaque"] = function renderPOpaque(val) {
         if (false) { // (image.isImage(val.val)) {
           return renderers.renderImage(val.val);
@@ -59,7 +59,7 @@
         }
       };
       renderers["nothing"] = function(val) {
-        return "nothing";
+        return "";
       }
       renderers["boolean"] = function(val) {
         return sooper(renderers, "boolean", val);
@@ -68,7 +68,7 @@
         var escapedUnicode = '"' + replaceUnprintableStringChars(val, true) + '"';
         return escapedUnicode;
       };
-      // Copied from runtime-anf, and tweaked.  Probably should be exported from runtime-anf instad
+      // Copied from installRuntime-anf, and tweaked.  Probably should be exported from installRuntime-anf instad
       var replaceUnprintableStringChars = function (s, toggleUnicode) {
         var ret = [], i;
         for (i = 0; i < s.length; i++) {
@@ -117,7 +117,7 @@
         return base;
       };
       renderers["ref"] = function(val, implicit, pushTodo) {
-        pushTodo(undefined, undefined, val, [runtime.getRef(val)], "render-ref", { origVal: val, implicit: implicit });
+        pushTodo(undefined, undefined, val, [installRuntime.getRef(val)], "render-ref", { origVal: val, implicit: implicit });
       };
       renderers["render-ref"] = function(top) {
         return top.done[0];
@@ -182,44 +182,44 @@
       };
       function helper(val, values, wantCommaAtEnd) {
         var base = "";
-        if (runtime.ffi.isVSValue(val)) {
+        if (installRuntime.ffi.isVSValue(val)) {
           base += values.pop();
         }
-        else if (runtime.ffi.isVSStr(val)) {
-          base += runtime.unwrap(runtime.getField(val, "s"));
+        else if (installRuntime.ffi.isVSStr(val)) {
+          base += installRuntime.unwrap(installRuntime.getField(val, "s"));
         }
-        else if (runtime.ffi.isVSCollection(val)) {
+        else if (installRuntime.ffi.isVSCollection(val)) {
           base += "[";
-          base += runtime.unwrap(runtime.getField(val, "name"));
+          base += installRuntime.unwrap(installRuntime.getField(val, "name"));
           base += ": ";
-          var items = runtime.ffi.toArray(runtime.getField(val, "items"));
+          var items = installRuntime.ffi.toArray(installRuntime.getField(val, "items"));
           base += groupItems(items, values, 0, items.length);
           base += "]";
         }
-        else if (runtime.ffi.isVSConstr(val)) {
-          base += runtime.unwrap(runtime.getField(val, "name"));
+        else if (installRuntime.ffi.isVSConstr(val)) {
+          base += installRuntime.unwrap(installRuntime.getField(val, "name"));
           base += "(";
-          var items = runtime.ffi.toArray(runtime.getField(val, "args"));
+          var items = installRuntime.ffi.toArray(installRuntime.getField(val, "args"));
           for (var i = 0; i < items.length; i++) {
             base += helper(items[i], values, (i + 1 < items.length));
           }
           base += ")";
         }
-        else if (runtime.ffi.isVSSeq(val)) {
-          var items = runtime.ffi.toArray(runtime.getField(val, "items"));
+        else if (installRuntime.ffi.isVSSeq(val)) {
+          var items = installRuntime.ffi.toArray(installRuntime.getField(val, "items"));
           for (var i = 0; i < items.length; i++) {
             base += helper(items[i], values, (i + 1 < items.length));
           }
-        } else if (runtime.ffi.isVSRow(val)) {
+        } else if (installRuntime.ffi.isVSRow(val)) {
           // TODO(Zachary): Implement Tables somehow, maybe with HTML mime type
           console.log("TABLE ROW ERROR");
 
-        } else if (runtime.ffi.isVSTable(val)) {
+        } else if (installRuntime.ffi.isVSTable(val)) {
           // TODO(Zachary): Implement Tables somehow, maybe with HTML mime type
           console.log("TABLE TABLE ERROR");
 
         } else {
-          var items = runtime.ffi.toArray(runtime.getField(val, "items"));
+          var items = installRuntime.ffi.toArray(installRuntime.getField(val, "items"));
           for (var i = 0; i < items.length; i++) {
             base += helper(items[i], values, (i + 1 < items.length));
           }
@@ -268,15 +268,6 @@
                 }, resolve);
               });
             },
-            renderErrors: function(pyretErrors) {
-              console.log("RENDER ERROR: ");
-              console.log(pyretErrors);
-              return new Promise(function(resolve, _) {
-                runtime.runThunk(() => {
-                  return runtime.getField(repl, "render-errors").app(pyretErrors);
-                }, resolve);
-              });
-            },
             runtime: runtime.getField(runtime.getField(repl, "new-runtime"), "runtime").val
           };
           return jsRepl;
@@ -285,6 +276,7 @@
 
       console.log("MAKING REPL");
       var repl = makeRepl();
+      installRenderers(repl.runtime);
       console.log("REPL READY");
 
 
@@ -303,7 +295,6 @@
 
       // Install renderers
       log("INSTALLING RENDERERS");
-      installRenderers();
 
       function Session(config) {
         config = config || {};
@@ -412,124 +403,61 @@
           }
         });
 
-        // async function renderErrorMessage(res) {
-        //   var replRuntime = repl.runtime;
+        function handleCompileError(compileError) {
+          return new Promise((resolve, reject) => {
+            runtime.runThunk(() => {
+              return runtime.getField(compileError, "render-reason").app();
+            },
+            (renderResult) => {
+              if (runtime.isFailureResult(renderResult)) {
+                // An error occured while attempting to `render-reason`:
+                var renderExn = renderResult.exn.exn;
+                reject(
+                  "An error occured while attempting to display an " +
+                  + "error that occured during compile-time: " + renderExn);
+              }
+              else if (runtime.isSuccessResult(renderResult)) {
+                // No error occured while calling `render-reason`. Now,
+                // use render-error-display library to display the
+                // ErrorDisplay to a string:
+                var renderedError = renderResult.result;
 
-        //   function renderError(error) {
-        //     return callDeferred(
-        //       runtime,
-        //       runtime.safeThen(function() {
-        //         return runtime.getField(error, "render-reason");
-        //       }, renderError).then(function(fun) {
-        //         return fun.app.apply(error, []);
-        //       }).start)
-        //   }
-
-        //   function displayErrorToString(renderedError) {
-        //     var renderErrorModule = replRuntime.modules["builtin://render-error-display"];
-        //     var renderError       = replRuntime.getField(renderErrorModule, "provide-plus-types");
-
-        //     return new Promise((resolve, reject) => {
-        //       runtime.runThunk(
-        //         function() {
-        //           return runtime.getField(runtime.getField(renderError, "values"), "display-to-string").app(
-        //             renderedError,
-        //             runtime.namespace.get("torepr"),
-        //             runtime.ffi.makeList([]));
-        //         },
-        //         function(printResult) {
-        //           console.log(printResult);
-        //           var error;
-        //           var traceback;
-        //           if (runtime.isSuccessResult(printResult)) {
-        //             error = printResult.result;
-        //             // traceback = "Stack trace:\n" + replRuntime.printPyretStack(res.exn.pyretStack);
-        //           } else {
-        //             error = "While trying to report that Pyret terminated with an error:\n" // + JSON.stringify(res)
-        //                       + "\ndisplaying that error produced another error:\n" + JSON.stringify(printResult);
-        //             // traceback = "Pyret stack:\n" + replRuntime.printPyretStack(pyretStack, true);
-        //           }
-        //           resolve({ error: error, traceback: traceback });
-        //         }, "errordisplay->to-string");
-        //     });
-        //   }
-
-        //   var renderedErrors = [];
-        //   for (var i = 0; i < res.length; i++) {
-        //     var rendered    = await renderError(res[i]);
-        //     console.log(rendered);
-        //     var stringError = await displayErrorToString(rendered);
-        //     console.log(stringError);
-        //     renderedErrors.push(stringError);
-        //   }
-
-        //   return renderedErrors;
-
-        //   // return new Promise((resolve, _) => {
-        //   //   // Load error renderer library:
-        //   //   var renderErrorModule = replRuntime.modules["builtin://render-error-display"];
-        //   //   var renderError       = replRuntime.getField(renderErrorModule, "provide-plus-types");
-
-
-
-        //   //   if (runtime.isPyretException(res.exn)) {
-        //   //     replRuntime.runThunk(() => {
-        //   //       if (replRuntime.isPyretVal(res.exn.exn) && replRuntime.hasField(res.exn.exn, "render-reason")) {
-        //   //         return replRuntime.getColonField(res.exn.exn, "render-reason").full_meth(res.exn.exn);
-        //   //       } else {
-        //   //         return replRuntime.ffi.edEmbed(res.exn.exn);
-        //   //       }
-        //   //     }, (reasonResult) => {
-        //   //       if (replRuntime.isFailureResult(reasonResult)) {
-        //   //         var error = "While trying to report that Pyret terminated with an error:\n" + JSON.stringify(res)
-        //   //                   + "\nPyret encountered an error rendering that error:\n" + JSON.stringify(reasonResult);
-        //   //         var traceback = "\nPyret stack:\n" + replRuntime.printPyretStack(pyretStack, true);
-        //   //         resolve({ error: error, traceback: traceback });
-        //   //       } else {
-        //   //         replRuntime.runThunk(
-        //   //           function() {
-        //   //             return replRuntime.getField(replRuntime.getField(renderError, "values"), "display-to-string").app(
-        //   //               reasonResult.result,
-        //   //               replRuntime.namespace.get("torepr"),
-        //   //               replRuntime.ffi.makeList(res.exn.pyretStack.map(replRuntime.makeSrcloc)));
-        //   //           },
-        //   //           function(printResult) {
-        //   //             var error;
-        //   //             var traceback;
-        //   //             if (replRuntime.isSuccessResult(printResult)) {
-        //   //               error = printResult.result;
-        //   //               traceback = "Stack trace:\n" + replRuntime.printPyretStack(res.exn.pyretStack);
-        //   //             } else {
-        //   //               error = "While trying to report that Pyret terminated with an error:\n" + JSON.stringify(res)
-        //   //                         + "\ndisplaying that error produced another error:\n" + JSON.stringify(printResult);
-        //   //               traceback = "Pyret stack:\n" + replRuntime.printPyretStack(pyretStack, true);
-        //   //             }
-        //   //             resolve({ error: error, traceback: traceback });
-        //   //           }, "errordisplay->to-string");
-        //   //       }
-        //   //     });
-
-        //   //   }
-        //   //   else {
-        //   //     resolve("Unknown error")
-        //   //   }
-        //   // });
-
-        // }
-
-        // function callDeferred(callingRuntime, thunk) {
-        //   return new Promise((resolve, reject) => {
-        //     callingRuntime.runThunk(
-        //       thunk,
-        //       function (result) {
-        //         if (callingRuntime.isSuccessResult(result)) {
-        //           resolve(result.result);
-        //         } else {
-        //           reject(result.exn);
-        //         }
-        //       });
-        //   });
-        // }
+                runtime.runThunk(() => {
+                  // Thunk is equivalent of:
+                  // RED.display-to-string(renderedError, torepr, empty)
+                  var redValues      = runtime.getField(renderErrorDisplayLib, "values");
+                  var pyDisplayToStr = runtime.getField(redValues, "display-to-string");
+                  var pyToRepr       = runtime.namespace.get("torepr");
+                  var emptyList      = runtime.ffi.makeList([]);
+                  return pyDisplayToStr.app(renderedError, pyToRepr, emptyList);
+                },
+                (displayToStringResult) => {
+                  if (runtime.isFailureResult(displayToStringResult)) {
+                    // An error occured while attempting to `display-to-string`:
+                    var displayExn = displayToStringResult.exn.exn;
+                    reject(
+                      "An error occured while attempting to display an " +
+                      + "error that occured during compile-time: " + displayExn);
+                  }
+                  else if (runtime.isSuccessResult(displayToStringResult)) {
+                    // No error occured, and we now have a human-readable
+                    // string reason for the non-compile:
+                    var rejectReason = displayToStringResult.result;
+                    resolve(rejectReason);
+                  }
+                  else {
+                    // Something unexpected occured:
+                    reject("Bad result: " + displayToStringResult);
+                  }
+                });
+              }
+              else {
+                // Something unexpected occured:
+                reject("Bad result: " + renderResult);
+              }
+            });
+          });
+        }
 
         function runInPyretRepl(input) {
           console.log("INPUT: " + input);
@@ -538,74 +466,39 @@
 
             repl.runInteraction(input).then((result) => {
               if (runtime.isFailureResult(result)) {
-                runtime.runThunk(() => {
-                  return runtime.getField(result.exn.exn, "render-reason").app();
-                }, (renderResult) => {
-                  if (runtime.isFailureResult(renderResult)) {
-                    var renderExn = renderResult.exn.exn;
-                    reject(
-                      "An error occured while attempting to display an " +
-                      + "error that occured during compile-time: " + renderExn);
-                  }
-                  else if (runtime.isSuccessResult(renderResult)) {
-                    var renderedError = renderResult.result;
-                    runtime.runThunk(() => {
-                      var RED_MODULE = runtime.getField(renderErrorDisplayLib, "values");
-                      return runtime.getField(RED_MODULE, "display-to-string").app(renderedError, runtime.namespace.get("torepr"), runtime.ffi.makeList([]));
-                    }, (displayToStringResult) => {
-                      if (runtime.isFailureResult(displayToStringResult)) {
-                        var displayExn = displayToStringResult.exn;
-                        reject(
-                          "An error occured while attempting to display an " +
-                          + "error that occured during compile-time: " + displayExn);
-                      }
-                      else if (runtime.isSuccessResult(displayToStringResult)) {
-                        var rejectReason = displayToStringResult.result;
-                        reject(rejectReason);
-                      }
-                      else {
-                        reject("Bad result: " + displayToStringResult);
-                      }
-                    });
-                  }
-                  else {
-                    reject("Bad result: " + renderResult);
-                  }
-                });
+                // Handle compile-time errors:
+                var compileExn = result.exn.exn;
+                handleCompileError(compileExn).then(reject, reject);
               }
               else if (runtime.isSuccessResult(result)) {
                 result = result.result;
                 return ffi.cases(ffi.isEither, "is-Either", result, {
                   left: reject,
-                  right: (v) => {
+                  right: (interactionResult) => {
                     console.log("right");
-                    console.log(v);
+                    var replResult  = runtime.getField(interactionResult, "repl-result");
+                    var checkResult = runtime.getField(interactionResult, "check-message");
+                    console.log(replResult);
+                    console.log(checkResult);
+
                     var replRuntime  = repl.runtime;
                     var loadInternal = runtime.getField(loadLib, "internal");
-                    var moduleResult = loadInternal.getModuleResultResult(v);
+                    var moduleResult = loadInternal.getModuleResultResult(replResult);
 
-                    if (replRuntime.isFailureResult(moduleResult)) {
-                      console.log("right-failure");
-                      console.log(moduleResult);
-                      console.log(moduleResult.exn);
-                      console.log(moduleResult.exn.exn);
-                      reject(moduleResult.exn.exn);
-
-                      // var failureReason = moduleResult.exn.exn;
-
-                      // runtime.runThunk(() => {
-                      //   return runtime.getColonField(failureReason, "render-reason").full_meth(failureReason);
-                      // }, reject)
-                      // reject(moduleResult.exn);
-                    }
-                    else if (replRuntime.isSuccessResult(moduleResult)) {
+                    if (replRuntime.isSuccessResult(moduleResult)) {
                       console.log("right-success");
                       var runValue   = moduleResult.result;
                       var runAnswer  = replRuntime.getField(runValue, "answer");
-                      var reprOutput = replRuntime.toReprJS(runAnswer, replRuntime.ReprMethods._torepr);
-                      resolve(reprOutput);
+                      var replToRepr = replRuntime.ReprMethods["$kernel"];
+                      var reprOutput = replRuntime.toReprJS(runAnswer, replToRepr);
+                      resolve({
+                        reprOutput: reprOutput,
+                        checkMessage: checkResult
+                      });
                     }
                     else {
+                      // We redirect failure results to the `left` branch within
+                      // jupyter-kernel.arr, so we should never get here:
                       reject("Bad result: " + moduleResult);
                     }
                   }
@@ -620,7 +513,15 @@
           });
         };
 
-        await runInPyretRepl(task.code).then(result => {
+        runInPyretRepl(task.code).then((result) => {
+          var reprOutput   = result.reprOutput;
+          var checkMessage = result.checkMessage;
+
+          if (task.onStdout) {
+            if (result.checkMessage != "The program didn't define any tests.") {
+              task.onStdout(checkMessage);
+            }
+          }
 
           // Handle error and success messages
           if (task.onSuccess) {
@@ -628,7 +529,7 @@
             // types other than plain text
             var bundle = {};
             if (result.toString()) {
-              bundle["mime"] = {"text/plain": result};
+              bundle["mime"] = {"text/plain": reprOutput};
             }
             task.onSuccess(bundle);
           }
@@ -650,7 +551,7 @@
           }
         }).catch(error => {
           if (task.onStderr) {
-            // task.onStderr(error);
+            task.onStderr(error);
           }
           else {
             log("SESSION: RECEIVED: STDERR: Missing stderr callback");
@@ -945,7 +846,7 @@
                 execution_count: this.executionCount,
                 ename: "Error", //result.error.name,
                 evalue: result, //result.error.message,
-                traceback: [result] //result.error.toString(),
+                traceback: [] //result.error.toString(),
               }
             );
 
@@ -955,7 +856,7 @@
                 execution_count: this.executionCount,
                 ename: "Error", //result.error.name,
                 evalue: result, //result.error.message,
-                traceback: [result] //result.error.toString(),
+                traceback: [] //result.error.toString(),
               }
             );
           }
