@@ -7,12 +7,21 @@ import load-lib as L
 import string-dict as SD
 import file as F
 import cmdline-lib as CL
+import render-error-display as RED
+
+import either as E
 
 import js-file("./jupyter-kernel") as JK
 
 import file("repl.arr") as R
 import file("compile-structs.arr") as CS
 import file("cli-module-loader.arr") as CLI
+
+type CompileResult = CS.CompileResult
+type Either = E.Either
+
+left = E.left
+right = E.right
 
 fun make-repl():
   doc: "Creates a repl specifically for the Jupyter kernel"
@@ -31,14 +40,45 @@ fun make-repl():
   end
 
   fun run-interaction(src):
-    i = repl.make-interaction-locator(lam(): src end)
-    repl.run-interaction(i)
+    interaction-loc = repl.make-interaction-locator(lam(): src end)
+    maybe-result = repl.run-interaction(interaction-loc)
+    cases (Either) maybe-result:
+      | left(compile-errors) =>
+        cases (List) compile-errors:
+          | empty => left("")
+          | link(f, _) =>
+            cases (CompileResult) f:
+              | ok(_) => left("an error occured")
+              | err(problems) =>
+                cases (List) problems:
+                  | empty => ""
+                  | link(first-problem, _) =>
+                    left(RED.display-to-string(first-problem.render-reason(), torepr, empty))
+                end
+            end
+        end
+      | right(result) =>
+        if L.is-success-result(result):
+          right(result)
+        else:
+          right(result)
+        end
+    end
+  end
+
+  fun render-errors(compile-errors):
+    cases (List) compile-errors:
+      | empty => ""
+      | link(f, r) =>
+        RED.display-to-string(f.render-reason(), torepr, empty)
+    end
   end
 
   {
     restart-interactions: restart-interactions,
     run-interaction: run-interaction,
-    new-runtime: new-runtime
+    new-runtime: new-runtime,
+    render-errors: render-errors
   }
 end
 

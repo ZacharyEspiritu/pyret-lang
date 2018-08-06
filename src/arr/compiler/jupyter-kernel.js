@@ -5,6 +5,10 @@
       name: "load-lib"
     },
     {
+      "import-type": "builtin",
+      name: "render-error-display"
+    },
+    {
       "import-type": "dependency",
       protocol: "file",
       args: ["repl.arr"]
@@ -21,7 +25,9 @@
   ],
   provides: {},
   nativeRequires: ["fs", "path", "uuid", "jmp", "pyret-base/js/js-numbers"],
-  theModule: function(runtime, namespace, uri, loadLib, pyRepl, compileStructs, runtimeLib, fs, path, uuid, jmp, jsnums) {
+  theModule: function(runtime, namespace, uri, loadLib, renderErrorDisplayLib,
+                      pyRepl, compileStructs, runtimeLib, fs, path, uuid,
+                      jmp, jsnums) {
 
     function installRenderers() {
       if (!runtime.ReprMethods.createNewRenderer("$kernel", runtime.ReprMethods._torepr)) return;
@@ -238,32 +244,37 @@
       console.log("STARTING KERNEL");
 
       function makeRepl() {
-        var pyMakeRepl = runtime.getField(pyretRepl, "make-repl");
-
         return runtime.safeCall(function() {
-          return pyMakeRepl.app();
+          return runtime.getField(pyretRepl, "make-repl").app();
         }, function(repl) {
+          // Load REPL values from the returned Object:
+          var pyRestartInteractions = runtime.getField(repl, "restart-interactions");
+          var pyRunInteraction = runtime.getField(repl, "run-interaction");
+          // Create JS interface to the Pyret REPL:
           var jsRepl = {
             restartInteractions: function(src) {
               console.log("RESTART INTERACTIONS: " + src);
-              return new Promise(function(resolve, reject) {
-                runtime.runThunk(function() {
-                  return runtime.getField(repl, "restart-interactions").app(src);
-                }, function(result) {
-                  console.log("DONE");
-                  resolve(result);
-                });
+              return new Promise(function(resolve, _) {
+                runtime.runThunk(() => {
+                  return pyRestartInteractions.app(src);
+                }, resolve);
               });
             },
             runInteraction: function(src) {
               console.log("RUN INTERACTION: " + src);
-              return new Promise(function(resolve, reject) {
-                runtime.runThunk(function() {
-                  return runtime.getField(repl, "run-interaction").app(src);
-                }, function(result) {
-                  console.log("DONE");
-                  resolve(result);
-                });
+              return new Promise(function(resolve, _) {
+                runtime.runThunk(() => {
+                  return pyRunInteraction.app(src);
+                }, resolve);
+              });
+            },
+            renderErrors: function(pyretErrors) {
+              console.log("RENDER ERROR: ");
+              console.log(pyretErrors);
+              return new Promise(function(resolve, _) {
+                runtime.runThunk(() => {
+                  return runtime.getField(repl, "render-errors").app(pyretErrors);
+                }, resolve);
               });
             },
             runtime: runtime.getField(runtime.getField(repl, "new-runtime"), "runtime").val
@@ -395,10 +406,130 @@
           task.beforeRun();
         }
 
-        // Grab pyret REPL interfaces
-        // var runInteractions = runtime.getField(pyretRepl, "run-interaction");
-        // var restartInteractions = runtime.getField(pyretRepl, "restart-interactions");
-        // var replRuntime = runtime.getField(pyretRepl, "repl-runtime");
+        repl.runtime.setStdout(function(str) {
+          if (task.onStdout) {
+            task.onStdout(str);
+          }
+        });
+
+        // async function renderErrorMessage(res) {
+        //   var replRuntime = repl.runtime;
+
+        //   function renderError(error) {
+        //     return callDeferred(
+        //       runtime,
+        //       runtime.safeThen(function() {
+        //         return runtime.getField(error, "render-reason");
+        //       }, renderError).then(function(fun) {
+        //         return fun.app.apply(error, []);
+        //       }).start)
+        //   }
+
+        //   function displayErrorToString(renderedError) {
+        //     var renderErrorModule = replRuntime.modules["builtin://render-error-display"];
+        //     var renderError       = replRuntime.getField(renderErrorModule, "provide-plus-types");
+
+        //     return new Promise((resolve, reject) => {
+        //       runtime.runThunk(
+        //         function() {
+        //           return runtime.getField(runtime.getField(renderError, "values"), "display-to-string").app(
+        //             renderedError,
+        //             runtime.namespace.get("torepr"),
+        //             runtime.ffi.makeList([]));
+        //         },
+        //         function(printResult) {
+        //           console.log(printResult);
+        //           var error;
+        //           var traceback;
+        //           if (runtime.isSuccessResult(printResult)) {
+        //             error = printResult.result;
+        //             // traceback = "Stack trace:\n" + replRuntime.printPyretStack(res.exn.pyretStack);
+        //           } else {
+        //             error = "While trying to report that Pyret terminated with an error:\n" // + JSON.stringify(res)
+        //                       + "\ndisplaying that error produced another error:\n" + JSON.stringify(printResult);
+        //             // traceback = "Pyret stack:\n" + replRuntime.printPyretStack(pyretStack, true);
+        //           }
+        //           resolve({ error: error, traceback: traceback });
+        //         }, "errordisplay->to-string");
+        //     });
+        //   }
+
+        //   var renderedErrors = [];
+        //   for (var i = 0; i < res.length; i++) {
+        //     var rendered    = await renderError(res[i]);
+        //     console.log(rendered);
+        //     var stringError = await displayErrorToString(rendered);
+        //     console.log(stringError);
+        //     renderedErrors.push(stringError);
+        //   }
+
+        //   return renderedErrors;
+
+        //   // return new Promise((resolve, _) => {
+        //   //   // Load error renderer library:
+        //   //   var renderErrorModule = replRuntime.modules["builtin://render-error-display"];
+        //   //   var renderError       = replRuntime.getField(renderErrorModule, "provide-plus-types");
+
+
+
+        //   //   if (runtime.isPyretException(res.exn)) {
+        //   //     replRuntime.runThunk(() => {
+        //   //       if (replRuntime.isPyretVal(res.exn.exn) && replRuntime.hasField(res.exn.exn, "render-reason")) {
+        //   //         return replRuntime.getColonField(res.exn.exn, "render-reason").full_meth(res.exn.exn);
+        //   //       } else {
+        //   //         return replRuntime.ffi.edEmbed(res.exn.exn);
+        //   //       }
+        //   //     }, (reasonResult) => {
+        //   //       if (replRuntime.isFailureResult(reasonResult)) {
+        //   //         var error = "While trying to report that Pyret terminated with an error:\n" + JSON.stringify(res)
+        //   //                   + "\nPyret encountered an error rendering that error:\n" + JSON.stringify(reasonResult);
+        //   //         var traceback = "\nPyret stack:\n" + replRuntime.printPyretStack(pyretStack, true);
+        //   //         resolve({ error: error, traceback: traceback });
+        //   //       } else {
+        //   //         replRuntime.runThunk(
+        //   //           function() {
+        //   //             return replRuntime.getField(replRuntime.getField(renderError, "values"), "display-to-string").app(
+        //   //               reasonResult.result,
+        //   //               replRuntime.namespace.get("torepr"),
+        //   //               replRuntime.ffi.makeList(res.exn.pyretStack.map(replRuntime.makeSrcloc)));
+        //   //           },
+        //   //           function(printResult) {
+        //   //             var error;
+        //   //             var traceback;
+        //   //             if (replRuntime.isSuccessResult(printResult)) {
+        //   //               error = printResult.result;
+        //   //               traceback = "Stack trace:\n" + replRuntime.printPyretStack(res.exn.pyretStack);
+        //   //             } else {
+        //   //               error = "While trying to report that Pyret terminated with an error:\n" + JSON.stringify(res)
+        //   //                         + "\ndisplaying that error produced another error:\n" + JSON.stringify(printResult);
+        //   //               traceback = "Pyret stack:\n" + replRuntime.printPyretStack(pyretStack, true);
+        //   //             }
+        //   //             resolve({ error: error, traceback: traceback });
+        //   //           }, "errordisplay->to-string");
+        //   //       }
+        //   //     });
+
+        //   //   }
+        //   //   else {
+        //   //     resolve("Unknown error")
+        //   //   }
+        //   // });
+
+        // }
+
+        // function callDeferred(callingRuntime, thunk) {
+        //   return new Promise((resolve, reject) => {
+        //     callingRuntime.runThunk(
+        //       thunk,
+        //       function (result) {
+        //         if (callingRuntime.isSuccessResult(result)) {
+        //           resolve(result.result);
+        //         } else {
+        //           reject(result.exn);
+        //         }
+        //       });
+        //   });
+        // }
 
         function runInPyretRepl(input) {
           console.log("INPUT: " + input);
@@ -407,30 +538,65 @@
 
             repl.runInteraction(input).then((result) => {
               if (runtime.isFailureResult(result)) {
-                var reason = result.exn;
-                reject(reason);
+                runtime.runThunk(() => {
+                  return runtime.getField(result.exn.exn, "render-reason").app();
+                }, (renderResult) => {
+                  if (runtime.isFailureResult(renderResult)) {
+                    var renderExn = renderResult.exn.exn;
+                    reject(
+                      "An error occured while attempting to display an " +
+                      + "error that occured during compile-time: " + renderExn);
+                  }
+                  else if (runtime.isSuccessResult(renderResult)) {
+                    var renderedError = renderResult.result;
+                    runtime.runThunk(() => {
+                      var RED_MODULE = runtime.getField(renderErrorDisplayLib, "values");
+                      return runtime.getField(RED_MODULE, "display-to-string").app(renderedError, runtime.namespace.get("torepr"), runtime.ffi.makeList([]));
+                    }, (displayToStringResult) => {
+                      if (runtime.isFailureResult(displayToStringResult)) {
+                        var displayExn = displayToStringResult.exn;
+                        reject(
+                          "An error occured while attempting to display an " +
+                          + "error that occured during compile-time: " + displayExn);
+                      }
+                      else if (runtime.isSuccessResult(displayToStringResult)) {
+                        var rejectReason = displayToStringResult.result;
+                        reject(rejectReason);
+                      }
+                      else {
+                        reject("Bad result: " + displayToStringResult);
+                      }
+                    });
+                  }
+                  else {
+                    reject("Bad result: " + renderResult);
+                  }
+                });
               }
               else if (runtime.isSuccessResult(result)) {
                 result = result.result;
                 return ffi.cases(ffi.isEither, "is-Either", result, {
-                  left: function(compileErrors) {
-                    console.log("left");
-                    var errors = ffi.toArray(compileErrors).reduce(function (errors, error) {
-                        Array.prototype.push.apply(errors,
-                          ffi.toArray(runtime.getField(error, "problems")));
-                        return errors;
-                      }, []);
-                    console.log(errors);
-                    reject(errors);
-                  },
-                  right: function(v) {
+                  left: reject,
+                  right: (v) => {
+                    console.log("right");
+                    console.log(v);
                     var replRuntime  = repl.runtime;
                     var loadInternal = runtime.getField(loadLib, "internal");
                     var moduleResult = loadInternal.getModuleResultResult(v);
 
                     if (replRuntime.isFailureResult(moduleResult)) {
                       console.log("right-failure");
-                      reject(moduleResult.exn);
+                      console.log(moduleResult);
+                      console.log(moduleResult.exn);
+                      console.log(moduleResult.exn.exn);
+                      reject(moduleResult.exn.exn);
+
+                      // var failureReason = moduleResult.exn.exn;
+
+                      // runtime.runThunk(() => {
+                      //   return runtime.getColonField(failureReason, "render-reason").full_meth(failureReason);
+                      // }, reject)
+                      // reject(moduleResult.exn);
                     }
                     else if (replRuntime.isSuccessResult(moduleResult)) {
                       console.log("right-success");
@@ -455,12 +621,6 @@
         };
 
         await runInPyretRepl(task.code).then(result => {
-          if (task.onStdout) {
-            // ignoring for now
-          }
-          else {
-            log("SESSION: RECEIVED: STDOUT: Missing stdout callback");
-          }
 
           // Handle error and success messages
           if (task.onSuccess) {
@@ -468,7 +628,7 @@
             // types other than plain text
             var bundle = {};
             if (result.toString()) {
-              bundle["mime"] = {"text/plain": result.toString()};
+              bundle["mime"] = {"text/plain": result};
             }
             task.onSuccess(bundle);
           }
@@ -746,8 +906,8 @@
               "execute_reply", {
                 status: "ok",
                 execution_count: this.executionCount,
-                payload: [], // TODO(NR) not implemented,
-                user_expressions: {}, // TODO(NR) not implemented,
+                payload: [], // not implemented
+                user_expressions: {}, // not implemented,
               }
             );
 
@@ -784,8 +944,8 @@
                 status: "error",
                 execution_count: this.executionCount,
                 ename: "Error", //result.error.name,
-                evalue: "Message", //result.error.message,
-                traceback: ["Traceback"] //result.error.toString(),
+                evalue: result, //result.error.message,
+                traceback: [result] //result.error.toString(),
               }
             );
 
@@ -794,8 +954,8 @@
               "error", {
                 execution_count: this.executionCount,
                 ename: "Error", //result.error.name,
-                evalue: "Message", //result.error.message,
-                traceback: ["Traceback"] //result.error.toString(),
+                evalue: result, //result.error.message,
+                traceback: [result] //result.error.toString(),
               }
             );
           }
