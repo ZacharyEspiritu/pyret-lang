@@ -1,43 +1,45 @@
 #!/usr/bin/env node
 
-const pyretClient = require('./client-lib');
-
+// Imports:
 const WebSocketClient = require('websocket').client;
-const lockFile = require('lockfile');
-const childProcess = require('child_process');
-const fs = require('fs');
-const console = require("console");
-const path = require("path");
-const vm = require("vm");
+const childProcess    = require('child_process');
+const fs              = require('fs');
+const console         = require("console");
+const path            = require("path");
 
-
-// Parse command arguments
-const DEFAULT_PORT = 5893;
+// Parse command arguments:
 const DEFAULT_COMPILER = "build/phaseA/pyret.jarr";
-const DEFAULT_KERNEL = "src/arr/compiler/jupyter-kernel.arr";
+const KERNEL_FLAG = "-kernel";
 var config = parseCommandArguments();
 
+// Write Kernel configuration to temp file:
 const tmpFile = ".pyret-kernel.tmp";
 fs.writeFileSync(tmpFile, String(JSON.stringify(config)));
-startupServer(DEFAULT_PORT);
 
-process.on('SIGINT', function() {
-  console.log("Caught interrupt signal, killing and restarting server");
-  shutdown();
-});
+// Start Kernel server:
+startupServer();
 
-
-
-function startupServer(port) {
+function startupServer() {
   const child = childProcess.fork(
     DEFAULT_COMPILER,
-    ["-kernel"],
-    // ["--run", DEFAULT_KERNEL],
+    [KERNEL_FLAG],
     {
       stdio: [0, 1, 2, 'ipc'],
       execArgv: ["-max-old-space-size=8192"]
     } // To send messages on completion of startup
   );
+
+  process.on('SIGINT', function() {
+    console.log("Caught interrupt signal, killing and restarting server");
+    try {
+      const pid = child.pid;
+      process.kill(pid, 'SIGINT');
+      console.log("Sent kill signal to " + pid);
+    }
+    catch(e) {
+      console.log("No process to quit: " + e);
+    }
+  });
 
   return new Promise((resolve, reject) => {
     child.on('message', function(msg) {
@@ -141,12 +143,11 @@ function parseCommandArguments() {
       console.error(usage);
       console.error(e)
       throw e;
-      // throw e;
     }
 
     var nodeVersion;
     var protocolVersion;
-    var ijsVersion;
+    var pyretVersion;
     var majorVersion = parseInt(config.protocolVersion.split(".")[0]);
     if (majorVersion <= 4) {
       nodeVersion = process.versions.node.split(".")
@@ -165,13 +166,13 @@ function parseCommandArguments() {
     } else {
       nodeVersion = process.versions.node;
       protocolVersion = config.protocolVersion;
-      ijsVersion = JSON.parse(
+      pyretVersion = JSON.parse(
         fs.readFileSync(path.join(__dirname, "..", "..", "package.json"))
       ).version;
       config.kernelInfoReply = {
         "protocol_version": protocolVersion,
         "implementation": "aye-pyret",
-        "implementation_version": ijsVersion,
+        "implementation_version": pyretVersion,
         "language_info": {
           "name": "pyret",
           "version": nodeVersion,
@@ -179,7 +180,7 @@ function parseCommandArguments() {
           "file_extension": ".arr",
         },
         "banner": (
-          "Pyret v" + ijsVersion + "\n" +
+          "Pyret v" + pyretVersion + "\n" +
           "https://github.com/brown-plt/pyret-lang\n"
         ),
         "help_links": [{
