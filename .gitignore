@@ -71,3 +71,7 @@ compiled/
 
 .pyret-parley.*.pid
 .pyret-parley.*.lock
+
+# pyret-kernel related
+.ipynb_checkpoints/
+.pyret-kernel.tmp
