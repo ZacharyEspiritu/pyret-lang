@@ -483,7 +483,7 @@ function installKernelAsync(context, callback) {
     var spec = {
         argv: context.args.kernel,
         display_name: "Pyret",
-        language: "pyret",
+        language: "pyret"
     };
     fs.writeFileSync(specFile, JSON.stringify(spec));
 

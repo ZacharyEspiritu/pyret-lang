@@ -30,7 +30,10 @@
                       jmp, jsnums) {
 
     function installRenderers(installRuntime) {
-      if (!installRuntime.ReprMethods.createNewRenderer("$kernel", installRuntime.ReprMethods._torepr)) return;
+      var installRtToRepr = installRuntime.ReprMethods._torepr
+      if (!installRuntime.ReprMethods.createNewRenderer("$kernel", installRtToRepr)) {
+        return;
+      }
 
       function sooper(renderers, valType, val) {
         return renderers.__proto__[valType](val);
@@ -110,7 +113,7 @@
         for (var i = 0; i < top.done.length; i++) {
           base += top.done[i];
           if (i != top.done.length) {
-            base += ",";
+            base += ", ";
           }
         }
         base += "]";
@@ -151,7 +154,7 @@
           base += top.extra.keys[i] + ": ";
           base += top.done[i];
           if (i + 1 < top.extra.keys.length) {
-            base += ",";
+            base += ", ";
           }
         }
         base += "}";
@@ -171,9 +174,10 @@
           var numFields = top.extra.fields.length;
           for (var i = 0; i < numFields; i++) {
             base += top.extra.fields[i];
+            base += ": ";
             base += top.done[numFields - i - 1];
             if (i + 1 < numFields) {
-              base += ",";
+              base += ", ";
             }
           }
           base += ")";
@@ -224,7 +228,7 @@
             base += helper(items[i], values, (i + 1 < items.length));
           }
         }
-        if (wantCommaAtEnd) { base += ","; }
+        if (wantCommaAtEnd) { base += ", "; }
         return base;
       }
       function groupItems(items, values, minIdx, maxIdx) {
@@ -270,12 +274,16 @@
                 }, resolve);
               });
             },
+            // String -> PyretBoolean
             checkParse: function(src) {
               return new Promise(function(resolve, _) {
                 runtime.runThunk(() => {
                   return pyCheckParse.app(src);
                 }, resolve)
               });
+            },
+            stop: function() {
+              runtime.breakAll();
             },
             // The runtime environment used within the REPL
             runtime: runtime.getField(runtime.getField(repl, "new-runtime"), "runtime").val
@@ -296,7 +304,7 @@
         console.error.apply(this, arguments);
       };
 
-      log = dontLog;
+      log = doLog;
 
       var Socket = jmp.Socket; // IPython/Jupyter protocol socket
       var zmq = jmp.zmq; // ZMQ bindings
@@ -787,6 +795,11 @@
        */
       Session.prototype.kill = function(signal, killCB) {
         this._status = "dead";
+
+        if (killCB) {
+          var EXIT_CODE = 0;
+          killCB(EXIT_CODE, signal);
+        }
       };
 
       /**
@@ -1502,6 +1515,7 @@
       Kernel.prototype.restart = function(restartCB) {
         log("Restarting kernel");
 
+        repl.stop();
         repl.restartInteractions("").then((_) => {
           this._initSession();
           if (restartCB) {
@@ -1512,6 +1526,11 @@
           console.error(err);
         });
       };
+
+      Kernel.prototype.interrupt = function() {
+        log("Interrupting kernel");
+        repl.stop();
+      }
 
       // Actually setting up the kernel now
       log("SETTING UP KERNEL");
@@ -1527,7 +1546,7 @@
 
           process.on("SIGINT", function() {
             console.log("Interrupting kernel");
-            kernel.restart();
+            kernel.interrupt();
           });
         }
         catch (err) {

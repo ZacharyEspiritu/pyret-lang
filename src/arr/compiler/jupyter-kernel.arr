@@ -24,7 +24,7 @@ left = E.left
 right = E.right
 
 fun make-repl():
-  doc: "Creates a repl specifically for the Jupyter kernel"
+  doc: "Creates a REPL object specifically for the Jupyter kernel"
 
   new-runtime = RT.make-runtime()
   repl = R.make-repl(
@@ -34,23 +34,34 @@ fun make-repl():
     CLI.default-start-context,
     lam(): CLI.module-finder end)
 
-  fun restart-interactions(src):
-    i = repl.make-definitions-locator(lam(): src end, CS.standard-globals)
-    repl.restart-interactions(i, CS.default-compile-options)
+  fun restart-interactions(src :: String):
+    doc: ```
+         Clears the definitions in the REPL and initializes it with the input
+         src code
+         ```
+    definitions-loc = repl.make-definitions-locator(lam(): src end, CS.standard-globals)
+    repl.restart-interactions(definitions-loc, CS.default-compile-options)
   end
 
-  fun run-interaction(src):
+  fun run-interaction(src :: String):
+    doc: "Runs the input src code in the REPL"
+    # Run input src code in REPL:
     interaction-loc = repl.make-interaction-locator(lam(): src end)
-    maybe-result = repl.run-interaction(interaction-loc)
+    maybe-result    = repl.run-interaction(interaction-loc)
+    # Check status of REPL result:
     cases (Either) maybe-result:
       | left(compile-errors) =>
         # The kernel can only send one error at a time according to the protocol
         # so we're just going to take the first possible error:
         cases (List) compile-errors:
-          | empty => left("")
+          | empty =>
+            # We shouldn't ever get in this branch:
+            left("An unknown internal kernel error occured. Please report this as a bug.")
           | link(f, _) =>
             cases (CompileResult) f:
-              | ok(_) => left("an error occured")
+              | ok(_) =>
+                # We shouldn't ever get in this branch:
+                left("An unknown internal kernel error occured. Please report this as a bug.")
               | err(problems) =>
                 cases (List) problems:
                   | empty => ""
@@ -67,12 +78,18 @@ fun make-repl():
             check-message: L.render-check-results(result).message
           })
         else:
-          left(L.render-error-message(result).message)
+          runtime-error-message = L.render-error-message(result).message
+          left(runtime-error-message)
         end
     end
   end
 
-  fun check-parse(program :: String):
+  fun check-parse(program :: String) -> Boolean:
+    doc: ```
+         Checks if the input program parses. Should be used when handling a
+         is_complete_request (generally, whether or not hitting the Enter key
+         should send a program to the kernel or add a newline to the program)
+         ```
     name = "parse-stub"
     maybe-ast = PP.maybe-surface-parse(program, name)
     cases(Either) maybe-ast:
