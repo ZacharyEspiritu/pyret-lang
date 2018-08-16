@@ -70,24 +70,11 @@ function startupServer() {
     } // To send messages on completion of startup
   );
 
-  // process.on('SIGINT', function() {
-  //   console.log("Caught interrupt signal, killing and restarting server");
-  //   try {
-  //     const pid = child.pid;
-  //     process.kill(pid, 'SIGINT');
-  //     console.log("Sent kill signal to " + pid);
-  //   }
-  //   catch(e) {
-  //     console.log("No process to quit: " + e);
-  //   }
-  // });
-
   return new Promise((resolve, reject) => {
     child.on('message', function(msg) {
       if(msg.type === 'success') {
         child.unref();
         child.disconnect();
-        // fs.writeFileSync(pidFile, String(child.pid));
         resolve(msg);
       }
       else {
