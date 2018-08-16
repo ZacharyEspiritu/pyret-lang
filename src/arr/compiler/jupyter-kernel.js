@@ -1,3 +1,78 @@
+/**
+ * Significant portions of this code are based on
+ * https://github.com/n-riesco/nel/ and https://github.com/n-riesco/jp-kernel/.
+ *
+ * ---
+ *
+ * LICENSE from https://github.com/n-riesco/nel/:
+ *
+ * Unless otherwise indicated, the software in this project is made available under
+ * the BSD 3-Clause License.
+ *
+ * Copyright (c) 2015, Nicolas Riesco and others as credited in the AUTHORS file
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification,
+ * are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ * list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation and/or
+ * other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software without
+ * specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ * ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * ---
+ *
+ * LICENSE from https://github.com/n-riesco/jp-kernel/:
+ *
+ * Unless otherwise indicated, the software in this project is made available under
+ * the BSD 3-Clause License.
+ *
+ * Copyright (c) 2015, Nicolas Riesco and others as credited in the AUTHORS file
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without modification,
+ * are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ * list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation and/or
+ * other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ * may be used to endorse or promote products derived from this software without
+ * specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+ * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+ * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
+ * ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
 ({
   requires: [
     {
@@ -29,6 +104,10 @@
                       pyRepl, compileStructs, runtimeLib, fs, path, uuid,
                       jmp, jsnums) {
 
+    /**
+     * Installs _torepr renderers on the specified runtime.
+     * @param {PyretRuntime} installRuntime The runtime to install renderers on
+     */
     function installRenderers(installRuntime) {
       var installRtToRepr = installRuntime.ReprMethods._torepr
       if (!installRuntime.ReprMethods.createNewRenderer("$kernel", installRtToRepr)) {
@@ -41,6 +120,8 @@
 
       var renderers = installRuntime.ReprMethods["$kernel"];
       renderers["opaque"] = function renderPOpaque(val) {
+        // TODO(ZacharyEspiritu): Figure out how to get Images in the notebook,
+        // then update this accordingly.
         if (false) { // (image.isImage(val.val)) {
           return renderers.renderImage(val.val);
         } else {
@@ -50,6 +131,8 @@
       renderers["cyclic"] = function renderCyclic(val) {
         return sooper(renderers, "cyclic", val);
       };
+      // TODO(ZacharyEspiritu): Figure out how to get Images in the notebook,
+      // then update this accordingly.
       // renderers["render-color"] = function renderColor(top) {
       // };
       // renderers.renderImage = function renderImage(img) {
@@ -71,7 +154,9 @@
         var escapedUnicode = '"' + replaceUnprintableStringChars(val, true) + '"';
         return escapedUnicode;
       };
-      // Copied from installRuntime-anf, and tweaked.  Probably should be exported from installRuntime-anf instad
+      // Note below from CPO:
+      // Copied from installRuntime-anf, and tweaked. Probably should be
+      // exported from installRuntime-anf instad
       var replaceUnprintableStringChars = function (s, toggleUnicode) {
         var ret = [], i;
         for (i = 0; i < s.length; i++) {
@@ -120,13 +205,24 @@
         return base;
       };
       renderers["ref"] = function(val, implicit, pushTodo) {
-        pushTodo(undefined, undefined, val, [installRuntime.getRef(val)], "render-ref", { origVal: val, implicit: implicit });
+        pushTodo(
+          undefined,
+          undefined,
+          val,
+          [installRuntime.getRef(val)],
+          "render-ref",
+          { origVal: val, implicit: implicit });
       };
       renderers["render-ref"] = function(top) {
         return top.done[0];
       };
       renderers["tuple"] = function(t, pushTodo) {
-        pushTodo(undefined, undefined, undefined, Array.prototype.slice.call(t.vals), "render-tuple");
+        pushTodo(
+          undefined,
+          undefined,
+          undefined,
+          Array.prototype.slice.call(t.vals),
+          "render-tuple");
       };
       renderers["render-tuple"] = function(top){
         var base = "{";
@@ -146,7 +242,13 @@
           keys.push(field); // NOTE: this is reversed order from the values,
           vals.unshift(val.dict[field]); // because processing will reverse them back
         }
-        pushTodo(undefined, val, undefined, vals, "render-object", { keys: keys, origVal: val });
+        pushTodo(
+          undefined,
+          val,
+          undefined,
+          vals,
+          "render-object",
+          { keys: keys, origVal: val });
       };
       renderers["render-object"] = function(top) {
         var base = "{";
@@ -215,11 +317,12 @@
             base += helper(items[i], values, (i + 1 < items.length));
           }
         } else if (installRuntime.ffi.isVSRow(val)) {
-          // TODO(Zachary): Implement Tables somehow, maybe with HTML mime type
+          // TODO(Zachary): Implement Tables somehow, maybe with HTML mime type,
+          // then update this accordingly.
           console.log("TABLE ROW ERROR");
-
         } else if (installRuntime.ffi.isVSTable(val)) {
-          // TODO(Zachary): Implement Tables somehow, maybe with HTML mime type
+          // TODO(Zachary): Implement Tables somehow, maybe with HTML mime type,
+          // then update this accordingly.
           console.log("TABLE TABLE ERROR");
 
         } else {
@@ -243,20 +346,40 @@
       };
     }
 
+    /**
+     * Starts a Jupyter kernel.
+     * @param  {Object} pyretRepl An Object passed from jupyter-kernel.arr
+     *  containing various Pyret functions
+     * @param  {Function} restarter Passed from runtime.pauseStack
+     */
     function startKernel(pyretRepl, restarter) {
 
+      /**
+       * Instantiates a JavaScript interface between the Pyret REPL and the
+       * Jupyter kernel.
+       * @return {Object} A Javascript object containing functions that
+       *  interface with the Pyret REPL functions
+       */
       function makeRepl() {
         return runtime.safeCall(function() {
+          // Get the REPL functions from jupyter-kernel.arr:
           return runtime.getField(pyretRepl, "make-repl").app();
         }, function(repl) {
           // Load REPL values from the returned Object:
           var pyRestartInteractions = runtime.getField(repl, "restart-interactions");
-          var pyRunInteraction = runtime.getField(repl, "run-interaction");
-          var pyCheckParse = runtime.getField(repl, "check-parse");
-          // Create JS interface to the Pyret REPL:
-          var jsRepl = {
-            // String -> Either
-            // Clears the stored definitions in the REPL and loads src in
+          var pyRunInteraction      = runtime.getField(repl, "run-interaction");
+          var pyCheckParse          = runtime.getField(repl, "check-parse");
+          // Create a Javascript object containing easier interfaces to each of
+          // the REPL functions:
+          return {
+            /**
+             * Clears the stored definitions in the REPL, then runs the
+             * supplied code. This function should not be called while a Pyret
+             * stack is running:
+             * @param {String} src The Pyret code to run
+             * @return {Promise<PyretResult<Either>>} The result of the REPL
+             *  interaction
+             */
             restartInteractions: function(src) {
               return new Promise(function(resolve, _) {
                 runtime.runThunk(() => {
@@ -264,9 +387,14 @@
                 }, resolve);
               });
             },
-            // String -> Either
-            // Runs the src code in the REPL, and if successful, saves the
-            // definitions in the REPL environment
+
+            /**
+             * Runs the src code in the REPL. If the run is successful, saves
+             * the definitions from src in the REPL environment.
+             * @param  {String} src The Pyret code to run
+             * @return {Promise<PyretResult<Either>>} The result of the REPL
+             *  interaction
+             */
             runInteraction: function(src) {
               return new Promise(function(resolve, _) {
                 runtime.runThunk(() => {
@@ -274,7 +402,28 @@
                 }, resolve);
               });
             },
-            // String -> PyretBoolean
+
+            /**
+             * Returns PyretTrue if `src` is a parsable Pyret program;
+             * otherwise, returns false.
+             *
+             * This function is used to handle `is_complete_request` messages
+             * from front-ends. For instance, the Jupyter CLI REPL front-end
+             * sends `is_complete_request` whenever the user hits the Enter
+             * key in order to determine whether or not to add a newline or
+             * send the program for execution.
+             *
+             * NOTE(ZacharyEspiritu): This is a naive check. The Jupyter
+             * protocol recommends sending error messages as soon as we know a
+             * program probably will never parse correctly. Currently, if
+             * someone introduces a syntax error it will always tell the CLI
+             * REPL to enter a newline, which isn't super user-friendly. This
+             * is something that doesn't necessarily have to be handled in
+             * the kernel, but could be part of a "smarter" parse library.
+             *
+             * @param  {String} src The Pyret code to check
+             * @return {Promise<PyretResult<PyretBoolean>>} The parse result
+             */
             checkParse: function(src) {
               return new Promise(function(resolve, _) {
                 runtime.runThunk(() => {
@@ -282,19 +431,28 @@
                 }, resolve)
               });
             },
+
+            /**
+             * Stops any running Pyret process.
+             */
             stop: function() {
               runtime.breakAll();
             },
-            // The runtime environment used within the REPL
+
+            /**
+             * The runtime environment used within the REPL.
+             * @type {PyretRuntime}
+             */
             runtime: runtime.getField(runtime.getField(repl, "new-runtime"), "runtime").val
           };
-          return jsRepl;
         }, "make-repl");
       }
 
+      // Instantiate a REPL:
       var repl = makeRepl();
-      installRenderers(repl.runtime);
 
+      // Install the _torepr renderers on the REPL runtime:
+      installRenderers(repl.runtime);
 
       // Setup logging helpers
       var log;
@@ -303,13 +461,15 @@
         process.stderr.write("KERNEL: ");
         console.error.apply(this, arguments);
       };
-
-      log = doLog;
+      log = dontLog;
 
       var Socket = jmp.Socket; // IPython/Jupyter protocol socket
       var zmq = jmp.zmq; // ZMQ bindings
 
-      // Install renderers
+      /**
+       * Represents a Pyret session
+       * @param {Object} config Session configuration
+       */
       function Session(config) {
         config = config || {};
 
@@ -367,11 +527,10 @@
 
         /**
          * Server status as a string that can take the following values:
-         *   "starting" (status from the time the server is spawned until the time
-         *              the server is ready to receive requests);
-         *   "online"   (status when the server is ready to receive requests);
-         *   "dead"     (status after receiving a request to kill the server
-         *              {@link module:nel~Session.kill}).
+         *   "starting" (status from the time the server is spawned until the
+         *              time the server is ready to receive requests)
+         *   "online"   (status when the server is ready to receive requests)
+         *   "dead"     (status after receiving a request to kill the server)
          * @private
          */
         this._status = "online";
@@ -397,6 +556,7 @@
        * @private
        */
       Session.prototype._runNow = function(task) {
+        // Below code from jp-kernel:
         var id = this._lastContextId + 1;
 
         log("SESSION: RUN: TASK:", id, task);
@@ -411,12 +571,21 @@
           task.beforeRun();
         }
 
+        // Every task might have a different onStdout function, so we have to
+        // setStdout on the repl runtime individually:
         repl.runtime.setStdout(function(str) {
           if (task.onStdout) {
             task.onStdout(str);
           }
         });
 
+        /**
+         * Helper function to handle compile errors from calls to
+         * repl.runInteraction.
+         * @param  {PyretError} compileError The Pyret compile error, retrieved
+         *  from PyretFailureResult.exn.exn
+         * @return {Promise<String>} Human-readable description of the error
+         */
         function handleCompileError(compileError) {
           return new Promise((resolve, reject) => {
             runtime.runThunk(() => {
@@ -473,6 +642,17 @@
           });
         }
 
+        /**
+         * Runs the input code in the Pyret REPL.
+         * @param  {String} input The Pyret code to run
+         * @return {Promise} A Promise containing the result. Resolved if the
+         *  run succeeded completely with no errors; otherwise, rejected. If
+         *  resolved, the output is an Object containing
+         *  reprOutput :: String (the result of the run) and checkMessage ::
+         *  String (the result of any test cases that were executed). Otherwise,
+         *  returns a String representing a human-readable string of any errors
+         *  that occured.
+         */
         function runInPyretRepl(input) {
           return new Promise((resolve, reject) => {
             const ffi = runtime.ffi;
@@ -522,11 +702,17 @@
           });
         };
 
+        // Run the Pyret code in the REPL:
         runInPyretRepl(task.code).then((result) => {
+          // If we're here, we succeeded:
+
           var reprOutput   = result.reprOutput;
           var checkMessage = result.checkMessage;
 
           if (task.onStdout) {
+            // Only send the test message to stdout if there were any tests
+            // defined.
+            // NOTE(ZacharyEspiritu): Is there a better way to check for this?
             if (result.checkMessage != "The program didn't define any tests.") {
               task.onStdout(checkMessage);
             }
@@ -535,7 +721,8 @@
           // Handle error and success messages
           if (task.onSuccess) {
             // TODO(Zachary): Needs to be updated to support multiple return
-            // types other than plain text
+            // types other than plain text. This probably should be done in the
+            // renderers.
             var bundle = {};
             if (reprOutput.toString() && reprOutput !== "") {
               bundle["mime"] = {"text/plain": reprOutput};
@@ -559,6 +746,7 @@
             this._runNext();
           }
         }).catch(error => {
+          // If we're here, this means some kind of error occured:
           if (task.onStderr) {
             task.onStderr(error);
           }
@@ -764,7 +952,12 @@
        * @param {OnStdioCB}             [callbacks.onStderr]
        */
       Session.prototype.complete = function(code, cursorPos, callbacks) {
-        // TODO (Zachary): brave the seas and potentially add autocomplete
+        // TODO(ZacharyEspiritu): This is a handler for code autocomplete
+        // requests.
+        //
+        // It is not required for compliance with the Jupyter
+        // specification, but the infrastructure is here in the event that
+        // Pyret eventually gets an autocomplete feature.
       };
 
       /**
@@ -781,7 +974,16 @@
        * @param {OnStdioCB}             [callbacks.onStderr]
        */
       Session.prototype.inspect = function(code, cursorPos, callbacks) {
-        // TODO (Zachary): determine if this is necessary
+        // TODO(ZacharyEspiritu): This is a handler for `inspect_request`s.
+        // The Jupyter specification for this is "Code can be inspected to show
+        // useful information to the user. It is up to the Kernel to decide
+        // what information should be displayed, and its formatting." For
+        // example, in iPython, typing `x?` where x is any known identifier
+        // returns the type of the variable and any associated docstring.
+        //
+        // It is not required for compliance with the Jupyter
+        // specification, but the infrastructure is here in the event that
+        // Pyret eventually gets an autocomplete feature.
       };
 
       /**
@@ -818,6 +1020,18 @@
         }).bind(this));
       };
 
+      /**
+       * This function instantiates an object containing handlers for each of
+       * the Jupyter messages.
+       *
+       * To add a handler for a new message, define a function named the same
+       * as the message you want to handle, then add it to the returned Object
+       * at the end of this function. This allows us to easily add handlers
+       * for new messages without digging into too much source code.
+       *
+       * Most of this code is taken from
+       * https://github.com/n-riesco/jp-kernel/blob/master/lib/handlers_v5.js
+       */
       function JmpHandlers() {
         /**
          * Send `status_busy` message
@@ -937,17 +1151,14 @@
           }
 
           function onError(result) {
-            // TODO (Zachary): determine if parsing of Pyret errors should happen
-            // before onError is called or inside of onError itself
-
             request.respond(
               this.shellSocket,
               "execute_reply", {
                 status: "error",
                 execution_count: this.executionCount,
-                ename: "Error", //result.error.name,
-                evalue: result, //result.error.message,
-                traceback: [] //result.error.toString(),
+                ename: "Error",
+                evalue: result,
+                traceback: []
               }
             );
 
@@ -955,9 +1166,9 @@
               this.iopubSocket,
               "error", {
                 execution_count: this.executionCount,
-                ename: "Error", //result.error.name,
-                evalue: result, //result.error.message,
-                traceback: [] //result.error.toString(),
+                ename: "Error",
+                evalue: result,
+                traceback: []
               }
             );
           }
@@ -1177,9 +1388,38 @@
       }
 
       /**
+       * Kernel configuration.
+       *
+       * @typedef KernelConfig
+       *
+       * @property {object}  connection      Frontend connection file
+       *
+       * @property {string}  cwd             Session current working directory
+       *
+       * @property {boolean} debug           Enable debug mode
+       *
+       * @property {boolean} hideExecutionResult
+       *                                     Do not show execution results
+       *
+       * @property {boolean} hideUndefined   Do not show undefined results
+       *
+       * @property {object}  kernelInfoReply Content of kernel_info_reply message
+       *
+       * @property {string}  protocolVersion Message protocol version
+       *
+       * @property {StartupCB}
+       *                     startupCallback Callback invoked at session startup.
+       *                                     This callback can be used to setup a
+       *                                     session; e.g. to register a require
+       *                                     extensions.
+       */
+
+      /**
        * @class
-       * @classdesc Implements a Javascript kernel for IPython/Jupyter.
-       * @param {Config}  config  Kernel configuration
+       * @classdesc Implements a Pyret kernel for Jupyter. Much of this Kernel
+       *  code is taken from
+       *  https://github.com/n-riesco/jp-kernel/blob/master/lib/jp-kernel.js
+       * @param {KernelConfig}  config  Kernel configuration
        */
       function Kernel(config) {
         var kernel = {};
@@ -1275,14 +1515,6 @@
         this.startupCallback = config.startupCallback;
 
         /**
-         * Path to a Javascript file to be run on session startup. Path to a folder
-         * also accepted, in which case all the Javascript files in the folder will
-         * be run.
-         * @member {String}
-         */
-        this.startupScript = config.startupScript;
-
-        /**
          * Number of visible execution requests
          * @member {Number}
          */
@@ -1299,13 +1531,10 @@
          * Collection of message handlers that links a message type with the method
          * handling the response
          * @member {Object.<String, Function>}
-         * @see {@link module:handler_v4}
-         * @see {@link module:handler_v5}
          */
         this.handlers = JmpHandlers();
 
         this._bindSockets();
-
         this._initSession();
       }
 
@@ -1410,64 +1639,6 @@
         if (this.startupCallback) {
           this.startupCallback();
         }
-
-        this._runStartupScripts();
-      };
-
-      /**
-       * Run startup scripts
-       *
-       * @private
-       */
-      Kernel.prototype._runStartupScripts = function() {
-        var startupScripts;
-
-        if (this.startupScript) {
-          var stats = fs.lstatSync(this.startupScript);
-          if (stats.isDirectory()) {
-            var dir = this.startupScript;
-            startupScripts = fs.readdirSync(dir).filter(function(filename) {
-              var ext = filename.slice(filename.length - 3).toLowerCase();
-              return ext === ".js";
-            }).sort().map(function(filename) {
-              return path.join(dir, filename);
-            });
-
-          }
-          else if (stats.isFile()) {
-            startupScripts = [this.startupScript];
-
-          }
-          else {
-            startupScripts = [];
-          }
-        }
-        else {
-          startupScripts = [];
-        }
-
-        log("startupScript: " + startupScripts);
-
-        startupScripts.forEach((function(script) {
-          var code;
-
-          try {
-            code = fs.readFileSync(script).toString();
-          }
-          catch (e) {
-            log("startupScript: Cannot read '" + script + "'");
-            return;
-          }
-
-          this.session.execute(code, {
-            onSuccess: function onSuccess() {
-              log("startupScript: '" + script + "' run successfuly");
-            },
-            onError: function onError() {
-              log("startupScript: '" + script + "' failed to run");
-            }
-          });
-        }).bind(this));
       };
 
       /**
@@ -1479,7 +1650,6 @@
       Kernel.prototype.destroy = function(destroyCB) {
         log("Destroying kernel");
 
-        // TODO(NR) Handle socket `this.stdin` once it is implemented
         this.controlSocket.removeAllListeners();
         this.shellSocket.removeAllListeners();
         this.iopubSocket.removeAllListeners();
@@ -1527,17 +1697,36 @@
         });
       };
 
+      /**
+       * @callback RestartCB
+       * @param {?Number} code   Exit code from session server if exited normally
+       * @param {?String} signal Signal passed to kill the session server
+       * @description Callback run after the session server has been restarted
+       * @see {@link Kernel.restart}
+       */
+
+      /**
+       * Interrupts kernel. Used to handle SIGINT signals as the Pyret stop
+       * button.
+       */
       Kernel.prototype.interrupt = function() {
         log("Interrupting kernel");
         repl.stop();
       }
 
-      // Actually setting up the kernel now
+      // Now that everything's defined, we can start setting up the kernel now:
       log("SETTING UP KERNEL");
       repl.restartInteractions("").then((_) => {
+        // NOTE(ZacharyEspiritu): There's something bizzare about the REPL in
+        // that the first runInteraction call takes about 10 seconds, and then
+        // subsequent calls are nearly instantaneous...this is a somewhat hacky
+        // fix for that, but it results in the REPL having a 10 second startup
+        // time, which needs to be fixed.
         return repl.runInteraction("");
       }).then((_) => {
         log("REPL READY");
+        // Read our Kernel config from the tmp file:
+        // TODO(ZacharyEspiritu): Rework this into command-line args, somehow
         const tmpFile = ".pyret-kernel.tmp";
         const config = JSON.parse(fs.readFileSync(tmpFile));
 
@@ -1566,7 +1755,7 @@
             },
             function(result) {
               // Ignored intentionally, since replServer just returns
-            })
+            });
         });
       })
     }, {});
