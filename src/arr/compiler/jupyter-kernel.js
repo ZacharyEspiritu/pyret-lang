@@ -1279,7 +1279,8 @@
           request.respond(
             this.shellSocket,
             "history_reply", {
-              "history": [] // TODO
+              "history": [] // TODO(ZacharyEspiritu): Not entirely necessary
+                            // since many frontends implement this themselves.
             }, {},
             this.protocolVersion
           );
@@ -1490,7 +1491,7 @@
 
         /**
          * Javascript session
-         * @member {module:nel~Session}
+         * @member {Session}
          */
         this.session = new Session({ cwd: config.cwd });
 
@@ -1649,6 +1650,8 @@
        */
       Kernel.prototype.destroy = function(destroyCB) {
         log("Destroying kernel");
+
+        repl.stop();
 
         this.controlSocket.removeAllListeners();
         this.shellSocket.removeAllListeners();
